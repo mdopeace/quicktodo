@@ -79,15 +79,15 @@
 		A1B2C3D4E5F60708090A0B07 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
-			name = "QuickTodoApp.swift";
-			path = "Sources/QuickTodoApp.swift";
+			name = "main.swift";
+			path = "Sources/main.swift";
 			sourceTree = "<group>";
 		};
 		A1B2C3D4E5F60708090A0B08 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
-			name = "ContentView.swift";
-			path = "Sources/ContentView.swift";
+			name = "AppDelegate.swift";
+			path = "Sources/AppDelegate.swift";
 			sourceTree = "<group>";
 		};
 		A1B2C3D4E5F60708090A0B09 = {
