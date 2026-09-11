@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let quit = NSMenuItem(title: "Quit QuickTodo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
+        quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: "Quit")
         menu.addItem(quit)
 
         return menu
