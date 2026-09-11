@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.minimumWidth = 300
 
         let header = NSMenuItem(title: "QuickTodo", action: nil, keyEquivalent: "")
         header.isEnabled = false
