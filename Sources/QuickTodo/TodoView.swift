@@ -87,7 +87,9 @@ struct TodoView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
+                Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
+                    .accessibilityLabel("Quit")
+                    .help("Quit")
                     .buttonStyle(.link)
                     .font(.caption)
             }
