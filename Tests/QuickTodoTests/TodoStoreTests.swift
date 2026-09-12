@@ -25,6 +25,15 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertTrue(store.items.isEmpty)
     }
 
+    func test_newest_first() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("A")
+        store.add("B")
+        XCTAssertEqual(store.orderedItems.map(\.title), ["B", "A"])
+    }
+
     func test_blank_title_ignored() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")

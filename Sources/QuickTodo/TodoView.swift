@@ -53,7 +53,7 @@ struct TodoView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(store.items) { item in
+                        ForEach(store.orderedItems) { item in
                             HStack(spacing: 8) {
                                 Button {
                                     store.toggle(item.id)

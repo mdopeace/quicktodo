@@ -9,6 +9,9 @@ public struct TodoItem: Codable, Identifiable, Equatable {
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
+    /// Newest first — existing stored todos predate newest-first insertion,
+    /// so reverse at display time instead of migrating the file.
+    public var orderedItems: [TodoItem] { Array(items.reversed()) }
     private let fileURL: URL
 
     public init(fileURL: URL? = nil) {
