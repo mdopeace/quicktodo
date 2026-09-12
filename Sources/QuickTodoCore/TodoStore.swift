@@ -9,10 +9,9 @@ public struct TodoItem: Codable, Identifiable, Equatable {
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
-    /// Active newest-first on top, done newest-first at the bottom.
+    /// Active newest-first on top, done oldest-first at the bottom.
     public var orderedItems: [TodoItem] {
-        let newestFirst = items.reversed()
-        return newestFirst.filter { !$0.isDone } + newestFirst.filter { $0.isDone }
+        items.reversed().filter { !$0.isDone } + items.filter { $0.isDone }
     }
     private let fileURL: URL
 
