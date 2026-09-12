@@ -12,6 +12,9 @@ struct TodoView: View {
                 Text("QuickTodo")
                     .font(.headline)
                 Spacer()
+                Text("⌘⌥T")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
@@ -84,9 +87,6 @@ struct TodoView: View {
                 .padding(.horizontal, 12)
 
             HStack {
-                Text("⌘⌥T to open")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 Spacer()
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
                     .accessibilityLabel("Quit")
