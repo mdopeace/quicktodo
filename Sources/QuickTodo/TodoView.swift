@@ -24,7 +24,7 @@ struct TodoView: View {
                 .padding(.horizontal, 12)
 
             HStack(spacing: 8) {
-                TextField("New todo…", text: $draft)
+                TextField("Start typing to add...", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
