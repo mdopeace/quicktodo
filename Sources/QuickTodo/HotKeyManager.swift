@@ -1,36 +1,51 @@
 import AppKit
-import ApplicationServices
+import Carbon
 
-// ponytail: NSEvent monitors, not Carbon/RegisterEventHotKey or a hotkey
-// pkg — enough for one fixed hotkey; revisit if customization needed.
+// System-global hotkey via Carbon: needs no Accessibility permission,
+// unlike NSEvent global monitors (which silently die when untrusted).
+//
+// Lifetime: AppDelegate owns this for the process lifetime; the Carbon
+// handler holds self unretained, so don't release early or move ownership.
 final class HotKeyManager {
     var onHotKey: (() -> Void)?
-    private var localMonitor: Any?
-    private var globalMonitor: Any?
+    private var hotKeyRef: EventHotKeyRef?
+    private var handlerRef: EventHandlerRef?
+    private var registered = false
 
     func register() {
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.matches(event) == true {
-                self?.onHotKey?()
-                return nil
-            }
-            return event
+        guard !registered else { return }
+        registered = true
+
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        var type = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let installStatus = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, _, userData -> OSStatus in
+                guard let userData else { return noErr }
+                Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue().onHotKey?()
+                return noErr
+            },
+            1, &type, selfPtr, &handlerRef
+        )
+        if installStatus != noErr {
+            NSLog("quicktodo: InstallEventHandler failed (%d) — hotkey dead", installStatus)
         }
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.matches(event) == true {
-                self?.onHotKey?()
-            }
-        }
-        if globalMonitor == nil {
-            // No Accessibility trust → global hotkey silently dead. Prompt once.
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(opts)
-            NSLog("QuickTodo: global hotkey needs Accessibility permission (⌘⌥T works while menu is open regardless)")
+        // ⌘⌥T
+        var hkID = EventHotKeyID(signature: OSType(0x51545444), id: 1) // 'QTTD'
+        let hotKeyStatus = RegisterEventHotKey(
+            UInt32(kVK_ANSI_T), UInt32(cmdKey | optionKey),
+            hkID, GetApplicationEventTarget(), 0, &hotKeyRef
+        )
+        if hotKeyStatus != noErr {
+            NSLog("quicktodo: RegisterEventHotKey failed (%d) — ⌘⌥T may be claimed by another app", hotKeyStatus)
         }
     }
 
-    private func matches(_ event: NSEvent) -> Bool {
-        event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command, .option]
-            && event.charactersIgnoringModifiers?.lowercased() == "t"
+    deinit {
+        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let handlerRef { RemoveEventHandler(handlerRef) }
     }
 }

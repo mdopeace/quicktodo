@@ -83,7 +83,7 @@ struct TodoView: View {
                 .padding(.horizontal, 12)
 
             HStack {
-                Text("⌘⌥T to toggle")
+                Text("⌘⌥T to open")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -94,7 +94,7 @@ struct TodoView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .frame(width: 300, height: 380)
+        .frame(width: MenuMetrics.width) // height hugs content; AppDelegate caps it
     }
 
     private func submit() {
