@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import QuickTodoCore
+import ServiceManagement
 import SwiftUI
 
 extension Notification.Name {
@@ -49,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         hotKeys.onHotKey = { [weak self] in self?.openMenu() }
         hotKeys.register()
+        registerLaunchAtLogin()
     }
 
     // Hotkey is open-only (Spotlight-style): closing stays on
@@ -65,6 +67,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.post(name: .quickTodoMenuWillOpen, object: nil)
     }
     func menuDidClose(_ menu: NSMenu) { menuOpen = false }
+
+    private func registerLaunchAtLogin() {
+        guard SMAppService.mainApp.status != .enabled else { return }
+
+        do {
+            try SMAppService.mainApp.register()
+        } catch {
+            NSLog("quicktodo: launch-at-login registration failed: %@", error.localizedDescription)
+        }
+    }
 
     // Hug content: measure the SwiftUI ideal height so short lists leave no void.
     private func layoutMenu() {
