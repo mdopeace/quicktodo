@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:quicktodo}",
+      "name": "Debug QuickTodo",
+      "target": "QuickTodo",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug QuickTodo"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:quicktodo}",
+      "name": "Release QuickTodo",
+      "target": "QuickTodo",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release QuickTodo"
+    }
+  ]
+}
