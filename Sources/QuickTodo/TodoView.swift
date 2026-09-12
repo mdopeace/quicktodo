@@ -15,7 +15,7 @@ struct TodoView: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.bottom, 10)
 
             Divider()
                 .padding(.horizontal, 12)
@@ -45,7 +45,8 @@ struct TodoView: View {
             if store.items.isEmpty {
                 Text("Nothing here yet")
                     .foregroundStyle(.secondary)
-                    .padding()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -72,7 +73,7 @@ struct TodoView: View {
                                 .foregroundStyle(.secondary)
                             }
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, 10)
                         }
                     }
                 }
@@ -94,7 +95,7 @@ struct TodoView: View {
                     .font(.caption)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
         .frame(width: MenuMetrics.width) // height hugs content; AppDelegate caps it
     }
