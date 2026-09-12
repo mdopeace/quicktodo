@@ -5,7 +5,12 @@ struct TodoView: View {
     @ObservedObject var store: TodoStore
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
-    @State private var quitHover = false
+
+    private var progressValue: Double {
+        guard !store.items.isEmpty else { return 0 }
+        let done = Double(store.items.filter(\.isDone).count)
+        return done / Double(store.items.count)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,26 +92,33 @@ struct TodoView: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            Button { NSApp.terminate(nil) } label: {
-                HStack {
-                    Image(systemName: "power")
-                    Spacer()
-                    Text("⌘Q")
+            HStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.18))
+                            .frame(width: 44, height: 6)
+                        Capsule()
+                            .fill(progressValue >= 1 ? .green : .blue)
+                            .frame(width: 44 * CGFloat(progressValue), height: 6)
+                    }
+                    Text("\(store.items.filter(\.isDone).count)/\(store.items.count)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
-                .font(.caption)
-                .foregroundStyle(quitHover ? .primary : .secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 8)
+                Spacer()
+                Button { NSApp.terminate(nil) } label: {
+                    Image(systemName: "power")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Quit")
+                .help("Quit")
                 .padding(.vertical, 6)
-                .background(quitHover ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(RoundedRectangle(cornerRadius: 6))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Quit")
-            .help("Quit")
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 12)
             .padding(.vertical, 4)
-            .onHover { quitHover = $0 }
         }
         .frame(width: MenuMetrics.width) // height hugs content; AppDelegate caps it
     }
