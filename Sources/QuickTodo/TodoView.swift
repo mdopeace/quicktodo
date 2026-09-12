@@ -5,6 +5,7 @@ struct TodoView: View {
     @ObservedObject var store: TodoStore
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
+    @State private var quitHover = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,16 +87,26 @@ struct TodoView: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            HStack {
-                Spacer()
-                Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
-                    .accessibilityLabel("Quit")
-                    .help("Quit")
-                    .buttonStyle(.link)
-                    .font(.caption)
+            Button { NSApp.terminate(nil) } label: {
+                HStack {
+                    Image(systemName: "power")
+                    Spacer()
+                    Text("⌘Q")
+                }
+                .font(.caption)
+                .foregroundStyle(quitHover ? .primary : .secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(quitHover ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(RoundedRectangle(cornerRadius: 6))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Quit")
+            .help("Quit")
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .onHover { quitHover = $0 }
         }
         .frame(width: MenuMetrics.width) // height hugs content; AppDelegate caps it
     }
