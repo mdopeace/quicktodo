@@ -4,6 +4,7 @@ import SwiftUI
 struct TodoView: View {
     @ObservedObject var store: TodoStore
     @State private var draft = ""
+    @State private var scrollTopTick = 0
     @FocusState private var inputFocused: Bool
 
     private var progressValue: Double {
@@ -45,6 +46,7 @@ struct TodoView: View {
                 // binding, and onCommit-style commits must never fire from refocusing.
                 draft = ""
                 inputFocused = false
+                scrollTopTick += 1
                 DispatchQueue.main.async { inputFocused = true }
             }
 
@@ -57,36 +59,44 @@ struct TodoView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(store.orderedItems) { item in
-                            HStack(spacing: 8) {
-                                Button {
-                                    store.toggle(item.id)
-                                } label: {
-                                    Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(store.orderedItems) { item in
+                                HStack(spacing: 8) {
+                                    Button {
+                                        store.toggle(item.id)
+                                    } label: {
+                                        Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                                    }
+                                    .buttonStyle(.plain)
+                                    Text(item.title)
+                                        .strikethrough(item.isDone)
+                                        .foregroundStyle(item.isDone ? .secondary : .primary)
+                                        .lineLimit(2)
+                                        .truncationMode(.tail)
+                                    Spacer(minLength: 8)
+                                    Button {
+                                        store.delete(item.id)
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(.secondary)
                                 }
-                                .buttonStyle(.plain)
-                                Text(item.title)
-                                    .strikethrough(item.isDone)
-                                    .foregroundStyle(item.isDone ? .secondary : .primary)
-                                    .lineLimit(2)
-                                    .truncationMode(.tail)
-                                Spacer(minLength: 8)
-                                Button {
-                                    store.delete(item.id)
-                                } label: {
-                                    Image(systemName: "xmark")
-                                }
-                                .buttonStyle(.plain)
-                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
+                        }
+                    }
+                    .frame(maxHeight: 220)
+                    .onChange(of: scrollTopTick) { _ in
+                        guard let first = store.orderedItems.first else { return }
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(first.id, anchor: .top)
                         }
                     }
                 }
-                .frame(maxHeight: 220)
             }
 
             Divider()
@@ -130,5 +140,6 @@ struct TodoView: View {
         draft = ""
         guard !title.isEmpty else { return }
         store.add(title)
+        scrollTopTick += 1
     }
 }
