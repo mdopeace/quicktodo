@@ -103,6 +103,14 @@ struct TodoView: View {
                 .padding(.horizontal, 12)
 
             HStack(spacing: 8) {
+                Link(destination: URL(string: "https://buymeacoffee.com/mdopeace")!) {
+                    Image(systemName: "heart")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Buy me a coffee")
+                .help("Buy me a coffee")
+                .buttonStyle(.plain)
                 HStack(spacing: 8) {
                     ZStack(alignment: .leading) {
                         Capsule()
