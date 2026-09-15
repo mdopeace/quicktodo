@@ -48,7 +48,7 @@ public final class TodoStore: ObservableObject {
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "MMM d, yyyy"
+        f.dateFormat = "EEE, MMM d, yyyy"
         return f
     }()
     private let fileURL: URL

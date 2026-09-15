@@ -159,7 +159,8 @@ final class TodoStoreTests: XCTestCase {
         let date = cal.date(from: comps)!
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.dateFormat = "MMM d, yyyy"
+        fmt.dateFormat = "EEE, MMM d, yyyy"
         XCTAssertEqual(TodoStore.dayLabel(for: date), fmt.string(from: date))
+        XCTAssertEqual(TodoStore.dayLabel(for: date), "Thu, Aug 13, 2026")
     }
 }
