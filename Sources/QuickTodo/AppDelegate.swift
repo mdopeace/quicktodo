@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory) // menubar-only, no dock icon
+        installMainMenu() // classic entry: no SwiftUI-provided menu, wire Quit ⌘Q ourselves
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let icon = NSImage(systemSymbolName: "checklist", accessibilityDescription: "QuickTodo")
@@ -67,6 +68,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.post(name: .quickTodoMenuWillOpen, object: nil)
     }
     func menuDidClose(_ menu: NSMenu) { menuOpen = false }
+
+    // Minimum main menu: with no SwiftUI lifecycle nothing installs the
+    // standard app menu, so route Quit ⌘Q ourselves (accessory policy keeps
+    // the menu bar hidden; this only restores the key equivalent).
+    // Note: .keyboardShortcut on the Quit button is NOT a substitute — key
+    // events during menu tracking are matched against menus, never reach
+    // the hosted view (verified: shortcut variant never fired).
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Quit QuickTodo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+        NSApp.mainMenu = mainMenu
+    }
 
     private func registerLaunchAtLogin() {
         guard SMAppService.mainApp.status != .enabled else { return }
