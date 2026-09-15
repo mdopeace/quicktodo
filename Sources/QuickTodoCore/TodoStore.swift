@@ -38,6 +38,16 @@ public final class TodoStore: ObservableObject {
     public var completedItems: [TodoItem] {
         items.filter { $0.isDone }
     }
+    /// Done within the last 7 days (by createdAt). Oldest-first.
+    public var recentCompletedItems: [TodoItem] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+        return items.filter { $0.isDone && $0.createdAt >= cutoff }
+    }
+    /// Done with createdAt older than 7 days. Oldest-first, shown collapsed.
+    public var olderCompletedItems: [TodoItem] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+        return items.filter { $0.isDone && $0.createdAt < cutoff }
+    }
 
     public static func dayLabel(for date: Date, calendar: Calendar = .current) -> String {
         if calendar.isDateInToday(date) { return "Today" }

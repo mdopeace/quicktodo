@@ -5,6 +5,7 @@ struct TodoView: View {
     @ObservedObject var store: TodoStore
     @State private var draft = ""
     @State private var scrollTopTick = 0
+    @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
     private var progressValue: Double {
@@ -69,11 +70,28 @@ struct TodoView: View {
                                     row(item)
                                 }
                             }
-                            if !store.completedItems.isEmpty {
+                            if !store.recentCompletedItems.isEmpty {
                                 sectionHeader("Completed")
-                                ForEach(store.completedItems) { item in
+                                ForEach(store.recentCompletedItems) { item in
                                     row(item)
                                 }
+                            }
+                            if !store.olderCompletedItems.isEmpty {
+                                DisclosureGroup(
+                                    isExpanded: $olderExpanded,
+                                    content: {
+                                        ForEach(store.olderCompletedItems) { item in
+                                            row(item)
+                                        }
+                                    },
+                                    label: {
+                                        Text("Older than a week (\(store.olderCompletedItems.count))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                )
+                                .padding(.horizontal, 12)
+                                .padding(.top, 8)
                             }
                         }
                     }
