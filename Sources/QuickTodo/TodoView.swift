@@ -62,38 +62,26 @@ struct TodoView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 0) {
-                            ForEach(store.orderedItems) { item in
-                                HStack(spacing: 8) {
-                                    Button {
-                                        store.toggle(item.id)
-                                    } label: {
-                                        Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
-                                    }
-                                    .buttonStyle(.plain)
-                                    Text(item.title)
-                                        .strikethrough(item.isDone)
-                                        .foregroundStyle(item.isDone ? .secondary : .primary)
-                                        .lineLimit(2)
-                                        .truncationMode(.tail)
-                                    Spacer(minLength: 8)
-                                    Button {
-                                        store.delete(item.id)
-                                    } label: {
-                                        Image(systemName: "xmark")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(.secondary)
+                            Color.clear.frame(height: 0).id("listTop")
+                            ForEach(store.activeByDay, id: \.day) { section in
+                                sectionHeader(TodoStore.dayLabel(for: section.day))
+                                ForEach(section.items) { item in
+                                    row(item)
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
+                            }
+                            if !store.completedItems.isEmpty {
+                                sectionHeader("Completed")
+                                ForEach(store.completedItems) { item in
+                                    row(item)
+                                }
                             }
                         }
                     }
                     .frame(maxHeight: 220)
                     .onChange(of: scrollTopTick) { _ in
-                        guard let first = store.orderedItems.first else { return }
+                        guard !store.items.isEmpty else { return }
                         DispatchQueue.main.async {
-                            proxy.scrollTo(first.id, anchor: .top)
+                            proxy.scrollTo("listTop", anchor: .top)
                         }
                     }
                 }
@@ -149,5 +137,43 @@ struct TodoView: View {
         guard !title.isEmpty else { return }
         store.add(title)
         scrollTopTick += 1
+    }
+
+    private func sectionHeader(_ label: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
+    }
+
+    private func row(_ item: TodoItem) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                store.toggle(item.id)
+            } label: {
+                Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+            }
+            .buttonStyle(.plain)
+            Text(item.title)
+                .strikethrough(item.isDone)
+                .foregroundStyle(item.isDone ? .secondary : .primary)
+                .lineLimit(2)
+                .truncationMode(.tail)
+            Spacer(minLength: 8)
+            Button {
+                store.delete(item.id)
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 }

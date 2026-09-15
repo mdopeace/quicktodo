@@ -5,14 +5,52 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     public var id = UUID()
     public var title: String
     public var isDone = false
+    public var createdAt = Date()
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, isDone, createdAt
+    }
+}
+
+public extension TodoItem {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decode(String.self, forKey: .title)
+        isDone = try c.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
 }
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
-    /// Active newest-first on top, done oldest-first at the bottom.
-    public var orderedItems: [TodoItem] {
-        items.reversed().filter { !$0.isDone } + items.filter { $0.isDone }
+    /// Active grouped by day, newest day first; newest-first within a day.
+    public var activeByDay: [(day: Date, items: [TodoItem])] {
+        let cal = Calendar.current
+        var buckets: [Date: [TodoItem]] = [:]
+        for item in items.reversed() where !item.isDone {
+            let day = cal.startOfDay(for: item.createdAt)
+            buckets[day, default: []].append(item)
+        }
+        return buckets.keys.sorted(by: >).map { (day: $0, items: buckets[$0]!) }
     }
+    /// All done, oldest-first at the bottom.
+    public var completedItems: [TodoItem] {
+        items.filter { $0.isDone }
+    }
+
+    public static func dayLabel(for date: Date, calendar: Calendar = .current) -> String {
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        return dayFormatter.string(from: date)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
     private let fileURL: URL
 
     public init(fileURL: URL? = nil) {
@@ -27,10 +65,10 @@ public final class TodoStore: ObservableObject {
         load()
     }
 
-    public func add(_ title: String) {
+    public func add(_ title: String, createdAt: Date = Date()) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        items.append(TodoItem(title: trimmed))
+        items.append(TodoItem(title: trimmed, createdAt: createdAt))
         save()
     }
 
