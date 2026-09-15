@@ -35,7 +35,11 @@ struct TodoView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
-                Button("Add", action: submit)
+                Button(action: submit) {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Add")
+                .help("Add")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
