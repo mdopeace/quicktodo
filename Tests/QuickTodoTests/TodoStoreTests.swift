@@ -146,6 +146,21 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertTrue(store.activeByDay.flatMap { $0.items }.map(\.title) == ["A"])
     }
 
+    func test_completed_splits_recent_and_older_than_week() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        let cal = Calendar.current
+        let now = Date()
+        let old = cal.date(byAdding: .day, value: -8, to: now)!
+        store.add("Recent", createdAt: now)
+        store.add("Old", createdAt: old)
+        store.toggle(store.items[0].id)
+        store.toggle(store.items[1].id)
+        XCTAssertEqual(store.recentCompletedItems.map(\.title), ["Recent"])
+        XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Old"])
+    }
+
     func test_dayLabel_formats_older_dates() throws {
         let cal = Calendar.current
         let today = Date()
