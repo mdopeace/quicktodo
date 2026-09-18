@@ -67,6 +67,7 @@ git reset --hard origin/main
 
 # 3. Build the app archive used by the in-app updater before publishing the
 #    tag, so a packaging failure cannot leave an incomplete release.
+swift build -c release --disable-sandbox
 ./scripts/build.sh
 ARCHIVE="quicktodo.app.zip"
 CHECKSUM="$ARCHIVE.sha256"
