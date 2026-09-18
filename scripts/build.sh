@@ -8,7 +8,6 @@ CONTENTS="$APP/Contents"
 VERSION=${MARKETING_VERSION:-1.0}
 BUILD=${CURRENT_PROJECT_VERSION:-1}
 
-swift build -c release --disable-sandbox
 rm -rf dist "$CONTENTS"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" dist
 
