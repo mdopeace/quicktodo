@@ -7,6 +7,31 @@ A minimal menu-bar todo app for macOS (Swift/SwiftUI).
 - macOS 13+
 - Xcode Command Line Tools (`swift`, `xcrun`)
 
+## Install
+
+```sh
+brew tap mdopeace/quicktodo
+brew install quicktodo
+```
+
+After install, launch the Homebrew-managed app with:
+
+```sh
+open "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app"
+```
+
+To copy the app into `/Applications`, replacing the existing `quicktodo.app` there:
+
+```sh
+cp -R "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app" /Applications/
+```
+
+The Homebrew formula cannot perform this copy itself because formula
+installation runs in a sandbox. You can also use quicktodo's **Check for Updates**
+command to install a release into `/Applications`.
+
+Homebrew upgrades update the managed bundle under `libexec`.
+
 ## Layout
 
 - `Package.swift` — SwiftPM (app + `QuickTodoCore` + tests)
@@ -14,40 +39,21 @@ A minimal menu-bar todo app for macOS (Swift/SwiftUI).
 - `Sources/QuickTodoCore/` — `TodoStore` (tested logic)
 - `Tests/` — `swift test`
 - `Assets.xcassets/` — AppIcon (App Store asset catalog, not raw `.icns`)
-- `Info.plist` — bundle metadata (single source of truth, copied by `scripts/package.sh`)
-- `QuickTodo.entitlements` — App Sandbox entitlements used by local and release builds
-- `scripts/package.sh` — builds and validates local or release bundles
+- `Info.plist` — bundle metadata (single source of truth, copied by `scripts/build.sh`)
+- `scripts/build.sh` — builds and validates the app bundle
+- `scripts/release.sh` — version bump, GitHub Release, tap update
 
 ## Build & test
 
 ```sh
 swift test
-./scripts/package.sh                 # local ad-hoc bundle
-MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 ./scripts/package.sh local
+./scripts/build.sh                 # local ad-hoc bundle
+MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 ./scripts/build.sh
 ```
 
-## App Store release
+## Release
 
-- Register `com.mdopeace.quicktodo` in the Apple Developer account and create
-  the matching App Store Connect app record.
-- Install the Apple distribution certificate and provisioning profile on the
-  release Mac. Do not commit signing credentials or profiles to this repo.
-- Build a signed release bundle after configuring the signing identity:
-
-  ```sh
-  SIGNING_IDENTITY="Apple Distribution: Name (TEAMID)" \
-  MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 \
-  ./scripts/package.sh release
-  ```
-
-- Inspect the resulting signature and entitlements, then upload the signed
-  artifact using the configured Xcode/App Store Connect workflow.
-- Complete App Store Connect screenshots, description, category, support URL,
-  privacy answers, age rating, and pricing before submission.
-- Test the signed app on macOS 13 and the current supported macOS release.
-
-The package script's default local mode is ad-hoc signed. Release mode fails if
-`SIGNING_IDENTITY` is not configured, so an unsigned or accidentally ad-hoc
-artifact is not treated as a submission build.
+Run `./scripts/release.sh` to bump the version, create a GitHub Release,
+and update the Homebrew tap.
 
 - `main` is branch-protected — please open a pull request.
