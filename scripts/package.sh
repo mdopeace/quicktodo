@@ -29,6 +29,11 @@ case "$MODE" in
         ;;
 esac
 
+# Clean build cache for release builds only (preserves incremental builds for local dev)
+if [ "$MODE" = "release" ]; then
+    swift package clean
+fi
+
 swift build -c release --disable-sandbox
 rm -rf dist "$CONTENTS"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" dist

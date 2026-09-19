@@ -20,7 +20,8 @@ class Quicktodo < Formula
       To launch:
         open "#{opt_prefix}/quicktodo.app"
 
-      To add to /Applications, use "Check for Updates" in the app menu.
+      To add to /Applications:
+        cp -R "#{opt_prefix}/quicktodo.app" /Applications/
     EOS
   end
 

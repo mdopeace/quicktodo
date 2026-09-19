@@ -58,35 +58,28 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Copy the currently running app to /Applications
-    func installCurrentAppToApplications() {
-        guard let appURL = Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("quicktodo.app") as URL? else { return }
+    /// Returns the .app bundle URL for the current running app
+    /// Works for both release .app bundles and development builds
+    private var currentAppBundleURL: URL? {
+        let bundleURL = Bundle.main.bundleURL
         
-        state = .installing
-        
-        let script = """
-        do shell script "ditto '\(appURL.path)' '/Applications/quicktodo.app' && xattr -dr com.apple.quarantine '/Applications/quicktodo.app'" with administrator privileges
-        """
-        
-        let appleScript = NSAppleScript(source: script)
-        var errorDict: NSDictionary?
-        appleScript?.executeAndReturnError(&errorDict)
-        
-        DispatchQueue.main.async {
-            if let errorDict = errorDict {
-                self.state = .error
-                self.errorMessage = "Install failed: \(errorDict[NSAppleScript.errorMessage] as? String ?? "Unknown error")"
-                self.resetAfterDelay()
-            } else {
-                self.state = .idle
-                // Relaunch from /Applications
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                task.arguments = ["/Applications/quicktodo.app"]
-                try? task.run()
-                NSApplication.shared.terminate(nil)
-            }
+        // If running from a proper .app bundle, use it directly
+        if bundleURL.pathExtension == "app" {
+            return bundleURL
         }
+        
+        // Development build (running from .build/release/QuickTodo executable)
+        // Find dist/quicktodo.app by searching up the directory tree
+        var current = bundleURL.deletingLastPathComponent()
+        for _ in 0..<6 {  // search up to 6 levels
+            let candidate = current.appendingPathComponent("dist/quicktodo.app")
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            current = current.deletingLastPathComponent()
+        }
+        
+        return nil
     }
 
     // MARK: - Private
@@ -243,8 +236,31 @@ final class Updater: ObservableObject {
     private func install(zipURL: URL) {
         DispatchQueue.main.async { self.state = .installing }
 
+        // In-place update: extract to current app bundle's parent directory
+        guard let appBundle = currentAppBundleURL else {
+            DispatchQueue.main.async {
+                self.state = .error
+                self.errorMessage = "Could not locate app bundle for update"
+                self.resetAfterDelay()
+            }
+            return
+        }
+        
+        let destDir = appBundle.deletingLastPathComponent().path
+        
+        // Check if destination is writable by current user (avoids admin prompt for Homebrew/user locations)
+        let needsAdmin = !FileManager.default.isWritableFile(atPath: destDir)
+
+        // Escape single quotes for safe shell interpolation
+        func shEscape(_ path: String) -> String {
+            return path.replacingOccurrences(of: "'", with: "'\\''")
+        }
+        let zipPath = shEscape(zipURL.path)
+        let destPath = shEscape(destDir)
+        let bundlePath = shEscape(appBundle.path)
+
         let script = """
-        do shell script "ditto -xk '\(zipURL.path)' '/Applications/' && xattr -dr com.apple.quarantine '/Applications/quicktodo.app'" with administrator privileges
+        do shell script "ditto -xk '\(zipPath)' '\(destPath)/' && xattr -dr com.apple.quarantine '\(bundlePath)'" \(needsAdmin ? "with administrator privileges" : "")
         """
 
         let appleScript = NSAppleScript(source: script)
@@ -261,10 +277,10 @@ final class Updater: ObservableObject {
                 self.releaseVersion = nil
                 self.releaseURL = nil
                 self.releaseChecksum = nil
-                // Relaunch the app from /Applications
+                // Relaunch from the same bundle location
                 let task = Process()
                 task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                task.arguments = ["/Applications/quicktodo.app"]
+                task.arguments = [appBundle.path]
                 try? task.run()
                 NSApplication.shared.terminate(nil)
             }

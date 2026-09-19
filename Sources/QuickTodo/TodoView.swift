@@ -6,7 +6,6 @@ struct TodoView: View {
     @StateObject private var updater = Updater.shared
     @State private var draft = ""
     @State private var scrollTopTick = 0
-    @State private var isInApplications = false
     @FocusState private var inputFocused: Bool
 
     private var progressValue: Double {
@@ -14,8 +13,6 @@ struct TodoView: View {
         let done = Double(store.items.filter(\.isDone).count)
         return done / Double(store.items.count)
     }
-
-    private static let appsFolder = URL(fileURLWithPath: "/Applications/quicktodo.app")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,7 +46,6 @@ struct TodoView: View {
             .padding(.vertical, 10)
             .onAppear {
                 inputFocused = true
-                isInApplications = FileManager.default.fileExists(atPath: Self.appsFolder.path)
             }
             .onReceive(NotificationCenter.default.publisher(for: .quickTodoMenuWillOpen)) { _ in
                 draft = ""
@@ -121,23 +117,10 @@ struct TodoView: View {
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
                 Spacer()
-                if !isInApplications {
-                    Button {
-                        updater.installCurrentAppToApplications()
-                    } label: {
-                        Image(systemName: "square.and.arrow.down.on.square")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Install to Applications")
-                    .help("Install to Applications")
-                }
                 if updater.state != .idle {
                     UpdateIndicator(state: updater.state) {
                         switch updater.state {
                         case .available: updater.downloadAndInstall()
-                        case .idle, .checking: updater.checkManually()
                         case .error: updater.checkManually()
                         default: break
                         }
@@ -249,10 +232,10 @@ struct UpdateIndicator: View {
     var iconName: String {
         switch state {
         case .checking: "arrow.clockwise.circle"
-        case .available: "arrow.down.circle.fill"
+        case .available: "arrow.down.circle"
         case .downloading: "arrow.down.circle"
-        case .installing: "gear.circle.fill"
-        case .error: "exclamationmark.triangle.fill"
+        case .installing: "gear.circle"
+        case .error: "exclamationmark.triangle"
         case .idle: ""
         }
     }
