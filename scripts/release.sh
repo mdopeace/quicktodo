@@ -161,4 +161,16 @@ class Quicktodo < Formula
 end
 EOF
 
+  (
+      cd "$TAP"
+      git checkout -b "quicktodo-v$V"
+      git add -A
+      git commit -m "quicktodo $V"
+      git push -u origin "quicktodo-v$V"
+      gh pr create --base main --head "quicktodo-v$V" --title "quicktodo $V" \
+          --body "Releases quicktodo v$V." >/dev/null
+      gh pr merge --merge --delete-branch
+  )
+  rm -rf "$TAP"
+
 echo "Released v$V. Users can now: brew update && brew upgrade quicktodo"
