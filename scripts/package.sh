@@ -55,3 +55,12 @@ codesign --verify --deep --strict "$APP"
 
 echo "Built $APP ($MODE, version $VERSION, build $BUILD)"
 ls "$CONTENTS/Resources"
+
+# Create archive + checksum for GitHub Release / in-app updater
+if [ "${CREATE_ARCHIVE:-}" = "1" ]; then
+    ARCHIVE="quicktodo.app.zip"
+    CHECKSUM="$ARCHIVE.sha256"
+    ditto -c -k --keepParent "$APP" "$ARCHIVE"
+    shasum -a 256 "$ARCHIVE" > "$CHECKSUM"
+    echo "Created $ARCHIVE + $CHECKSUM"
+fi
