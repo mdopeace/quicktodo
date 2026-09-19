@@ -88,11 +88,11 @@ echo "$SRC_TARBALL_SHA  $SRC_TARBALL" > "$SRC_TARBALL.sha256"
 
 gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM" "$SRC_TARBALL" "$SRC_TARBALL.sha256"
 
-# 5. Use release asset URL for Homebrew formula (more reliable than auto-generated)
-SRC_URL="https://github.com/$REPO/releases/download/v$V/$SRC_TARBALL"
+# 5. Use GitHub auto-generated source tarball URL (standard for Homebrew)
+SRC_URL="https://github.com/$REPO/archive/refs/tags/v$V.tar.gz"
 SRC_SHA=$(curl -sL "$SRC_URL" | shasum -a 256 | awk '{print $1}')
 if [ -z "$SRC_SHA" ]; then
-    echo "error: failed to fetch source tarball SHA from release asset" >&2
+    echo "error: failed to fetch source tarball SHA from GitHub" >&2
     exit 1
 fi
 
@@ -100,8 +100,9 @@ fi
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 F="$TAP/Formula/quicktodo.rb"
-# Update URL to use release asset (more reliable than auto-generated source tarball)
-sed -i '' "s#https://github.com/[^/]*/[^/]*/archive/refs/tags/v[0-9.]*\.tar\.gz#https://github.com/$REPO/releases/download/v$V/quicktodo-v$V.tar.gz#" "$F"
+# Update URL to use auto-generated source tarball (standard Homebrew pattern)
+sed -i '' "s#https://github.com/[^/]*/[^/]*/archive/refs/tags/v[0-9.]*\.tar\.gz#https://github.com/$REPO/archive/refs/tags/v$V.tar.gz#" "$F"
+sed -i '' "s#https://github.com/[^/]*/[^/]*/releases/download/v[0-9.]*\/[^/]*\.tar\.gz#https://github.com/$REPO/archive/refs/tags/v$V.tar.gz#" "$F"
 # Match either hex sha256 or the placeholder
 sed -i '' "s/sha256 \"[^\"]*\"/sha256 \"$SRC_SHA\"/" "$F"
 (
