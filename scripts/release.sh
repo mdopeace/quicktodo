@@ -94,7 +94,8 @@ rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 F="$TAP/Formula/quicktodo.rb"
 sed -i '' "s#tags/v[0-9.]*\.tar\.gz#tags/v$V.tar.gz#" "$F"
-sed -i '' "s/sha256 \"[0-9a-f]*\"/sha256 \"$SRC_SHA\"/" "$F"
+# Match either hex sha256 or the placeholder
+sed -i '' "s/sha256 \"[^\"]*\"/sha256 \"$SRC_SHA\"/" "$F"
 (
     cd "$TAP"
     git checkout -b "quicktodo-v$V"
