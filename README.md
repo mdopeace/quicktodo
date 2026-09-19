@@ -30,7 +30,7 @@ To copy it into `/Applications`, replacing the existing `quicktodo.app` there:
 cp -R "$(brew --prefix)/opt/quicktodo/quicktodo.app" /Applications/
 ```
 
-You can also use the app's **Check for Updates** command to install a release into `/Applications`.
+The app checks for updates automatically on launch and when opening the menu. When an update is available, a download button (⬇️) appears in the menu footer — click it to download and install the update in-place.
 
 ### from source
 
@@ -56,7 +56,7 @@ open dist/quicktodo.app
 - Day-grouped list with "Completed" section
 - Global hotkey (⌘⌥T) to open menu
 - Launch at login support
-- Auto-updates via GitHub API (automatic on launch + manual via footer indicator)
+- Auto-updates via GitHub API (automatic check on launch/menu-open; when update available, footer shows ⬇️ to download & install in-place)
 - Ad-hoc signed, sandboxed
 
 ## Notes
