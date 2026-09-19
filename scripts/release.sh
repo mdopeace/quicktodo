@@ -73,20 +73,13 @@ git reset --hard origin/main
 MARKETING_VERSION="$V" CURRENT_PROJECT_VERSION="$V" CREATE_ARCHIVE=1 ./scripts/package.sh local
 ARCHIVE="quicktodo.app.zip"
 CHECKSUM="$ARCHIVE.sha256"
-trap 'rm -f "$ARCHIVE" "$CHECKSUM" "$SRC_TARBALL" "$SRC_TARBALL.sha256"' EXIT
+trap 'rm -f "$ARCHIVE" "$CHECKSUM"' EXIT
 
 # 4. Tag the release (tags are not branch-protected) and attach the app
-#    archive, its checksum, and source tarball to the GitHub Release.
+#    archive and its checksum to the GitHub Release.
 git tag "v$V"
 git push origin "v$V"
-
-# Create source tarball for release asset
-SRC_TARBALL="quicktodo-v$V.tar.gz"
-git archive --format=tar.gz --prefix="quicktodo-v$V/" "v$V" > "$SRC_TARBALL"
-SRC_TARBALL_SHA=$(shasum -a 256 "$SRC_TARBALL" | awk '{print $1}')
-echo "$SRC_TARBALL_SHA  $SRC_TARBALL" > "$SRC_TARBALL.sha256"
-
-gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM" "$SRC_TARBALL" "$SRC_TARBALL.sha256"
+gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM"
 
 # 5. Use GitHub auto-generated source tarball URL (standard for Homebrew)
 SRC_URL="https://github.com/$REPO/archive/refs/tags/v$V.tar.gz"
