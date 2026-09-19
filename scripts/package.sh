@@ -29,7 +29,7 @@ case "$MODE" in
         ;;
 esac
 
-swift build -c release
+swift build -c release --disable-sandbox
 rm -rf dist "$CONTENTS"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" dist
 
