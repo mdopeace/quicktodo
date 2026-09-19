@@ -17,7 +17,7 @@ class Quicktodo < Formula
       quicktodo.app installed to:
         #{opt_libexec}/quicktodo.app
 
-      To launch:
+      To launch it:
         open "#{opt_libexec}/quicktodo.app"
 
       To add to /Applications:

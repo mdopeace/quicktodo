@@ -21,13 +21,13 @@ brew update && brew upgrade quicktodo
 Then launch:
 
 ```sh
-open "$(brew --prefix)/opt/quicktodo/quicktodo.app"
+open "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app"
 ```
 
 To copy it into `/Applications`, replacing the existing `quicktodo.app` there:
 
 ```sh
-cp -R "$(brew --prefix)/opt/quicktodo/quicktodo.app" /Applications/
+cp -R "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app" /Applications/
 ```
 
 The app checks for updates automatically on launch and when opening the menu. When an update is available, a download button (⬇️) appears in the menu footer — click it to download and install the update in-place.
