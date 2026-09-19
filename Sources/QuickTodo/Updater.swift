@@ -58,6 +58,37 @@ final class Updater: ObservableObject {
         }
     }
 
+    /// Copy the currently running app to /Applications
+    func installCurrentAppToApplications() {
+        guard let appURL = Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("quicktodo.app") as URL? else { return }
+        
+        state = .installing
+        
+        let script = """
+        do shell script "ditto '\(appURL.path)' '/Applications/quicktodo.app' && xattr -dr com.apple.quarantine '/Applications/quicktodo.app'" with administrator privileges
+        """
+        
+        let appleScript = NSAppleScript(source: script)
+        var errorDict: NSDictionary?
+        appleScript?.executeAndReturnError(&errorDict)
+        
+        DispatchQueue.main.async {
+            if let errorDict = errorDict {
+                self.state = .error
+                self.errorMessage = "Install failed: \(errorDict[NSAppleScript.errorMessage] as? String ?? "Unknown error")"
+                self.resetAfterDelay()
+            } else {
+                self.state = .idle
+                // Relaunch from /Applications
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                task.arguments = ["/Applications/quicktodo.app"]
+                try? task.run()
+                NSApplication.shared.terminate(nil)
+            }
+        }
+    }
+
     // MARK: - Private
 
     private var isManual = false

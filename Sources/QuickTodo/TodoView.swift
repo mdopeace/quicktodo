@@ -6,6 +6,7 @@ struct TodoView: View {
     @StateObject private var updater = Updater.shared
     @State private var draft = ""
     @State private var scrollTopTick = 0
+    @State private var isInApplications = false
     @FocusState private var inputFocused: Bool
 
     private var progressValue: Double {
@@ -13,6 +14,8 @@ struct TodoView: View {
         let done = Double(store.items.filter(\.isDone).count)
         return done / Double(store.items.count)
     }
+
+    private var appsFolder = URL(fileURLWithPath: "/Applications/quicktodo.app")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,11 +47,11 @@ struct TodoView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .onAppear { inputFocused = true }
+            .onAppear {
+                inputFocused = true
+                isInApplications = FileManager.default.fileExists(atPath: appsFolder.path)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .quickTodoMenuWillOpen)) { _ in
-                // Hosting view is reused — onAppear fires only once, refocus every open.
-                // Clear first: the menu editor can restore pre-submit text into the
-                // binding, and onCommit-style commits must never fire from refocusing.
                 draft = ""
                 inputFocused = false
                 scrollTopTick += 1
@@ -118,6 +121,18 @@ struct TodoView: View {
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
                 Spacer()
+                if !isInApplications {
+                    Button {
+                        updater.installCurrentAppToApplications()
+                    } label: {
+                        Image(systemName: "square.and.arrow.down.on.square")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Install to Applications")
+                    .help("Install to Applications")
+                }
                 if updater.state != .idle {
                     UpdateIndicator(state: updater.state) {
                         switch updater.state {
