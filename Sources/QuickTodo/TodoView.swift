@@ -15,7 +15,7 @@ struct TodoView: View {
         return done / Double(store.items.count)
     }
 
-    private var appsFolder = URL(fileURLWithPath: "/Applications/quicktodo.app")
+    private static let appsFolder = URL(fileURLWithPath: "/Applications/quicktodo.app")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,7 +49,7 @@ struct TodoView: View {
             .padding(.vertical, 10)
             .onAppear {
                 inputFocused = true
-                isInApplications = FileManager.default.fileExists(atPath: appsFolder.path)
+                isInApplications = FileManager.default.fileExists(atPath: Self.appsFolder.path)
             }
             .onReceive(NotificationCenter.default.publisher(for: .quickTodoMenuWillOpen)) { _ in
                 draft = ""
