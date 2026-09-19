@@ -93,10 +93,6 @@ fi
   rm -rf "$TAP"
   git clone "https://github.com/$TAP" "$TAP"
   F="$TAP/Formula/quicktodo.rb"
-  # Update URL to new version's binary release
-  sed -i '' "s#https://github.com/[^/]*/[^/]*/releases/download/v[0-9.]*\/[^/]*\.zip#https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip#" "$F"
-  # Match either hex sha256 or the placeholder
-  sed -i '' "s/sha256 \"[^\"]*\"/sha256 \"$SRC_SHA\"/" "$F"
   # Ensure formula uses libexec.install (not prefix) and correct caveats/test
   cat > "$F" <<EOF
 class Quicktodo < Formula
