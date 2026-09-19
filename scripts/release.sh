@@ -73,19 +73,26 @@ git reset --hard origin/main
 MARKETING_VERSION="$V" CURRENT_PROJECT_VERSION="$V" CREATE_ARCHIVE=1 ./scripts/package.sh local
 ARCHIVE="quicktodo.app.zip"
 CHECKSUM="$ARCHIVE.sha256"
-trap 'rm -f "$ARCHIVE" "$CHECKSUM"' EXIT
+trap 'rm -f "$ARCHIVE" "$CHECKSUM" "$SRC_TARBALL" "$SRC_TARBALL.sha256"' EXIT
 
 # 4. Tag the release (tags are not branch-protected) and attach the app
-#    archive and its checksum to the GitHub Release.
+#    archive, its checksum, and source tarball to the GitHub Release.
 git tag "v$V"
 git push origin "v$V"
-gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM"
 
-# 5. Get SHA of GitHub-generated source tarball for Homebrew formula
-SRC_URL="https://github.com/$REPO/archive/refs/tags/v$V.tar.gz"
+# Create source tarball for release asset
+SRC_TARBALL="quicktodo-v$V.tar.gz"
+git archive --format=tar.gz --prefix="quicktodo-v$V/" "v$V" > "$SRC_TARBALL"
+SRC_TARBALL_SHA=$(shasum -a 256 "$SRC_TARBALL" | awk '{print $1}')
+echo "$SRC_TARBALL_SHA  $SRC_TARBALL" > "$SRC_TARBALL.sha256"
+
+gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM" "$SRC_TARBALL" "$SRC_TARBALL.sha256"
+
+# 5. Use release asset URL for Homebrew formula (more reliable than auto-generated)
+SRC_URL="https://github.com/$REPO/releases/download/v$V/$SRC_TARBALL"
 SRC_SHA=$(curl -sL "$SRC_URL" | shasum -a 256 | awk '{print $1}')
 if [ -z "$SRC_SHA" ]; then
-    echo "error: failed to fetch source tarball SHA" >&2
+    echo "error: failed to fetch source tarball SHA from release asset" >&2
     exit 1
 fi
 
@@ -93,7 +100,8 @@ fi
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 F="$TAP/Formula/quicktodo.rb"
-sed -i '' "s#tags/v[0-9.]*\.tar\.gz#tags/v$V.tar.gz#" "$F"
+# Update URL to use release asset (more reliable than auto-generated source tarball)
+sed -i '' "s#https://github.com/[^/]*/[^/]*/archive/refs/tags/v[0-9.]*\.tar\.gz#https://github.com/$REPO/releases/download/v$V/quicktodo-v$V.tar.gz#" "$F"
 # Match either hex sha256 or the placeholder
 sed -i '' "s/sha256 \"[^\"]*\"/sha256 \"$SRC_SHA\"/" "$F"
 (
