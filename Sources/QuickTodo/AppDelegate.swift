@@ -52,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotKeys.onHotKey = { [weak self] in self?.openMenu() }
         hotKeys.register()
         registerLaunchAtLogin()
+
+        // Start auto-update check on launch (background, non-blocking)
+        Updater.shared.checkOnLaunch()
     }
 
     // Hotkey is open-only (Spotlight-style): closing stays on
@@ -66,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menuOpen = true
         layoutMenu() // defense: guarantee size before showing
         NotificationCenter.default.post(name: .quickTodoMenuWillOpen, object: nil)
+
+        // Check for updates on menu open (debounced: max once per 4h)
+        Updater.shared.checkOnMenuOpen()
     }
     func menuDidClose(_ menu: NSMenu) { menuOpen = false }
 
