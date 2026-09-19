@@ -83,11 +83,12 @@ gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM"
 
 # 5. Get SHA from the binary release asset (we distribute a binary zip)
 ASSET_URL="https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
-SRC_SHA=$(curl -sL "$ASSET_URL" | shasum -a 256 | awk '{print $1}')
-if [ -z "$SRC_SHA" ]; then
-    echo "error: failed to fetch binary release SHA from GitHub" >&2
+HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "$ASSET_URL")
+if [ "$HTTP_CODE" != "200" ]; then
+    echo "error: failed to fetch binary release (HTTP $HTTP_CODE)" >&2
     exit 1
 fi
+SRC_SHA=$(curl -sL "$ASSET_URL" | shasum -a 256 | awk '{print $1}')
 
 # 6. Update the main repo Formula/quicktodo.rb (for local dev builds from source)
 cat > Formula/quicktodo.rb <<EOF
