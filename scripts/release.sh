@@ -47,7 +47,7 @@ echo "  - Bump version in Info.plist"
 echo "  - Create & merge PR to main"
 echo "  - Tag v$V"
 echo "  - Create GitHub Release with binary zip + checksum"
-echo "  - Update Homebrew tap (uses GitHub-generated source tarball)"
+echo "  - Update Homebrew tap formula"
 read -p "Proceed? [y/N] " confirm || { echo "Aborted."; exit 1; }
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 
@@ -90,7 +90,7 @@ if [ -z "$SRC_SHA" ]; then
 fi
 
 # 6. Update the main repo Formula/quicktodo.rb (for local dev builds from source)
-  cat > Formula/quicktodo.rb <<EOF
+cat > Formula/quicktodo.rb <<EOF
 class Quicktodo < Formula
   desc "Minimal menu-bar todo app for macOS"
   homepage "https://github.com/mdopeace/quicktodo"
@@ -125,11 +125,11 @@ end
 EOF
 
 # 7. Update the tap formula to point at the new binary release + its checksum
-  rm -rf "$TAP"
-  git clone "https://github.com/$TAP" "$TAP"
-  F="$TAP/Formula/quicktodo.rb"
-  # Ensure formula uses libexec.install (not prefix) and correct caveats/test
-  cat > "$F" <<EOF
+rm -rf "$TAP"
+git clone "https://github.com/$TAP" "$TAP"
+F="$TAP/Formula/quicktodo.rb"
+# Ensure formula uses libexec.install (not prefix) and correct caveats/test
+cat > "$F" <<EOF
 class Quicktodo < Formula
   desc "Minimal menu-bar todo app for macOS"
   homepage "https://github.com/mdopeace/quicktodo"
@@ -139,6 +139,8 @@ class Quicktodo < Formula
   depends_on :macos
 
   def install
+    # Extract zip manually to handle the quicktodo.app/ structure
+    system "unzip", "-q", cached_download, "-d", "."
     libexec.install "quicktodo.app"
   end
 
@@ -161,16 +163,16 @@ class Quicktodo < Formula
 end
 EOF
 
-  (
-      cd "$TAP"
-      git checkout -b "quicktodo-v$V"
-      git add -A
-      git commit -m "quicktodo $V"
-      git push -u origin "quicktodo-v$V"
-      gh pr create --base main --head "quicktodo-v$V" --title "quicktodo $V" \
-          --body "Releases quicktodo v$V." >/dev/null
-      gh pr merge --merge --delete-branch
-  )
-  rm -rf "$TAP"
+(
+    cd "$TAP"
+    git checkout -b "quicktodo-v$V"
+    git add -A
+    git commit -m "quicktodo $V"
+    git push -u origin "quicktodo-v$V"
+    gh pr create --base main --head "quicktodo-v$V" --title "quicktodo $V" \
+        --body "Releases quicktodo v$V." >/dev/null
+    gh pr merge --merge --delete-branch
+)
+rm -rf "$TAP"
 
 echo "Released v$V. Users can now: brew update && brew upgrade quicktodo"
