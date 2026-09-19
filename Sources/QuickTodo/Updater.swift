@@ -63,14 +63,24 @@ final class Updater: ObservableObject {
     private var currentAppBundleURL: URL? {
         let bundleURL = Bundle.main.bundleURL
         
-        // If running from a proper .app bundle, use it directly
+        // If running from a proper .app bundle, return the .app directory
         if bundleURL.pathExtension == "app" {
             return bundleURL
         }
         
+        // Running from inside a .app bundle (e.g., Contents/MacOS/QuickTodo)
+        // Walk up to find the .app directory
+        var current = bundleURL
+        while !current.pathComponents.isEmpty {
+            if current.pathExtension == "app" {
+                return current
+            }
+            current = current.deletingLastPathComponent()
+        }
+        
         // Development build (running from .build/release/QuickTodo executable)
         // Find dist/quicktodo.app by searching up the directory tree
-        var current = bundleURL.deletingLastPathComponent()
+        current = bundleURL.deletingLastPathComponent()
         for _ in 0..<6 {  // search up to 6 levels
             let candidate = current.appendingPathComponent("dist/quicktodo.app")
             if FileManager.default.fileExists(atPath: candidate.path) {
@@ -248,8 +258,8 @@ final class Updater: ObservableObject {
         
         let destDir = appBundle.deletingLastPathComponent().path
         
-        // Check if destination is writable by current user (avoids admin prompt for Homebrew/user locations)
-        let needsAdmin = !FileManager.default.isWritableFile(atPath: destDir)
+        // Check if the bundle itself is writable (avoids admin prompt for user-writable locations)
+        let needsAdmin = !FileManager.default.isWritableFile(atPath: appBundle.path)
 
         // Escape single quotes for safe shell interpolation
         func shEscape(_ path: String) -> String {
@@ -277,7 +287,7 @@ final class Updater: ObservableObject {
                 self.releaseVersion = nil
                 self.releaseURL = nil
                 self.releaseChecksum = nil
-                // Relaunch from the same bundle location
+                // Relaunch from the same bundle location (use .app directory, not executable)
                 let task = Process()
                 task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
                 task.arguments = [appBundle.path]
@@ -311,36 +321,6 @@ final class Updater: ObservableObject {
 // MARK: - SwiftUI Helpers
 
 extension Updater.State {
-    var iconName: String {
-        switch self {
-        case .checking: return "arrow.clockwise.circle"
-        case .available: return "arrow.down.circle.fill"
-        case .downloading: return "arrow.down.circle"
-        case .installing: return "gear.circle.fill"
-        case .error: return "exclamationmark.triangle.fill"
-        case .idle: return ""
-        }
-    }
-
-    var iconColor: String {
-        switch self {
-        case .available: return "blue"
-        case .error: return "orange"
-        default: return "secondary"
-        }
-    }
-
-    var accessibilityLabel: String {
-        switch self {
-        case .checking: return "Checking for updates"
-        case .available: return "Update available"
-        case .downloading: return "Downloading update"
-        case .installing: return "Installing update"
-        case .error: return "Update error"
-        case .idle: return ""
-        }
-    }
-
     var helpText: String {
         switch self {
         case .checking: return "Checking for updates…"
