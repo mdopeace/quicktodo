@@ -1,11 +1,7 @@
-# quicktodo
+# QuickTodo
 
-A minimal menu-bar todo app for macOS (Swift/SwiftUI).
-
-## Requirements
-
-- macOS 13+
-- Xcode Command Line Tools (`swift`, `xcrun`)
+A minimal menu-bar todo app for macOS, written in Swift/SwiftUI.
+No Electron, no bloat — just a fast native app that lives in your menu bar.
 
 ## Install
 
@@ -16,24 +12,29 @@ brew tap mdopeace/quicktodo
 brew install quicktodo
 ```
 
-To update:
+To update to a newer release:
+
 ```sh
 brew update && brew upgrade quicktodo
 ```
 
-Launch:
+Then launch:
+
 ```sh
 open "$(brew --prefix)/opt/quicktodo/quicktodo.app"
 ```
 
-Or use the app's **Check for Updates** indicator in the footer to install into `/Applications`.
+To copy it into `/Applications`, replacing the existing `quicktodo.app` there:
 
-### Direct Download
+```sh
+cp -R "$(brew --prefix)/opt/quicktodo/quicktodo.app" /Applications/
+```
 
-Download latest `quicktodo.app.zip` from [Releases](https://github.com/mdopeace/quicktodo/releases).
-Unzip and move to `/Applications`. First launch: **Right-click → Open** (ad-hoc signed, not notarized).
+You can also use the app's **Check for Updates** command to install a release into `/Applications`.
 
-### From Source
+### from source
+
+Requires [Homebrew](https://brew.sh) and Xcode Command Line Tools (`swift`, `xcrun`):
 
 ```sh
 git clone https://github.com/mdopeace/quicktodo
@@ -42,97 +43,46 @@ cd quicktodo
 open dist/quicktodo.app
 ```
 
-## Layout
+## Requirements
 
-- `Package.swift` — SwiftPM (app + `QuickTodoCore` + tests)
-- `Sources/QuickTodo/` — app entry, UI
-- `Sources/QuickTodoCore/` — `TodoStore` (tested logic)
-- `Tests/` — `swift test`
-- `Assets.xcassets/` — AppIcon (App Store asset catalog, not raw `.icns`)
-- `Info.plist` — bundle metadata (single source of truth, copied by `scripts/package.sh`)
-- `QuickTodo.entitlements` — App Sandbox entitlements used by local and release builds
-- `scripts/package.sh` — builds and validates local or release bundles
-- `scripts/release.sh` — orchestrates versioned releases (Homebrew + GitHub)
-- `Formula/quicktodo.rb` — Homebrew formula (for `mdopeace/homebrew-quicktodo` tap)
-- `.github/workflows/` — CI/CD (build on push, release on tag)
+- macOS 13+ (Apple Silicon or Intel)
+- Xcode Command Line Tools
 
-## Build & test
+## Features
 
-```sh
-swift test
-./scripts/package.sh                 # local ad-hoc bundle
-MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 ./scripts/package.sh local
-```
+- Native SwiftUI menu-bar UI
+- Add, toggle, delete todos with keyboard
+- Progress tracker (completed/total)
+- Day-grouped list with "Completed" section
+- Global hotkey (⌘⌥T) to open menu
+- Launch at login support
+- Auto-updates via GitHub API (automatic on launch + manual via footer indicator)
+- Ad-hoc signed, sandboxed
 
-Create release archive (for GitHub Release / in-app updater):
-```sh
-CREATE_ARCHIVE=1 ./scripts/package.sh local
-# produces quicktodo.app.zip + quicktodo.app.zip.sha256
-```
+## Notes
 
-## Release workflow
+- The app is ad-hoc signed for local use. It is not notarized, so the first
+  launch of a downloaded copy may require right-click → Open (or
+  `xattr -dr com.apple.quarantine /Applications/quicktodo.app`).
+- Contributions and issues are welcome, but `main` is branch-protected —
+  please open a pull request.
 
-This project uses a **versioned-release model**: only tagged releases ship to users.
+## License
 
-1. Run the release script (requires `gh` CLI, authenticated):
-   ```sh
-   ./scripts/release.sh
-   ```
-   It will:
-   - Prompt for Patch/Minor/Major version bump
-   - Bump version in `Info.plist`
-   - Create & merge PR to `main` (branch-protected)
-   - Build `quicktodo.app.zip` + checksum
-   - Create source tarball for Homebrew
-   - Tag `vX.Y.Z` and push
-   - Create GitHub Release with all artifacts
-   - Update `mdopeace/homebrew-quicktodo` Formula via PR
+[MIT](LICENSE) © 2026 Md Mostafijur Rahman.
 
-2. GitHub Actions automatically runs on tag push:
-   - Builds and verifies the app
-   - Creates GitHub Release with binary + source artifacts
-   - Updates Homebrew tap formula
+## Links
 
-## Auto-updates
+- Homebrew tap: [mdopeace/homebrew-quicktodo](https://github.com/mdopeace/homebrew-quicktodo)
+- Releases: <https://github.com/mdopeace/quicktodo/releases>
 
-The app checks for updates automatically:
-- On launch (background, no UI unless update found)
-- On menu open (max once per 4 hours)
-- Manually via the **update indicator** in the footer (between progress tracker and Quit)
+## Releases
 
-When an update is available, the indicator shows a blue download icon. Click to download, verify, and install into `/Applications` (prompts for admin password via macOS dialog).
+Changes ship to Homebrew users as versioned releases, not per-commit. To cut a
+release, run `./scripts/release.sh` — it reads the current version from `Info.plist`,
+presents a Patch/Minor/Major selector (via a bash `select` menu),
+and handles the full release flow (bump, PR, tag, GitHub Release, tap update).
 
-## Gatekeeper Note
+Requires: [gh](https://cli.github.com) (authenticated).
 
-The app is ad-hoc signed. First launch of a downloaded copy requires **Right-click → Open** → "Open", or run:
-```sh
-xattr -dr com.apple.quarantine /Applications/quicktodo.app
-```
-
-## App Store release (alternative)
-
-If you have an Apple Developer Program membership ($99/yr):
-
-- Register `com.mdopeace.quicktodo` in the Apple Developer account and create
-  the matching App Store Connect app record.
-- Install the Apple distribution certificate and provisioning profile on the
-  release Mac. Do not commit signing credentials or profiles to this repo.
-- Build a signed release bundle after configuring the signing identity:
-
-  ```sh
-  SIGNING_IDENTITY="Apple Distribution: Name (TEAMID)" \
-  MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 \
-  ./scripts/package.sh release
-  ```
-
-- Inspect the resulting signature and entitlements, then upload the signed
-  artifact using the configured Xcode/App Store Connect workflow.
-- Complete App Store Connect screenshots, description, category, support URL,
-  privacy answers, age rating, and pricing before submission.
-- Test the signed app on macOS 13 and the current supported macOS release.
-
-The package script's default local mode is ad-hoc signed. Release mode fails if
-`SIGNING_IDENTITY` is not configured, so an unsigned or accidentally ad-hoc
-artifact is not treated as a submission build.
-
-- `main` is branch-protected — please open a pull request.
+Users then update with `brew update && brew upgrade quicktodo`.
