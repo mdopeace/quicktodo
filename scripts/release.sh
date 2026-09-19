@@ -81,21 +81,20 @@ git tag "v$V"
 git push origin "v$V"
 gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM"
 
-# 5. Use GitHub auto-generated source tarball URL (standard for Homebrew)
-SRC_URL="https://github.com/$REPO/archive/refs/tags/v$V.tar.gz"
-SRC_SHA=$(curl -sL "$SRC_URL" | shasum -a 256 | awk '{print $1}')
+# 5. Get SHA from the binary release asset (we distribute a binary zip)
+ASSET_URL="https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
+SRC_SHA=$(curl -sL "$ASSET_URL" | shasum -a 256 | awk '{print $1}')
 if [ -z "$SRC_SHA" ]; then
-    echo "error: failed to fetch source tarball SHA from GitHub" >&2
+    echo "error: failed to fetch binary release SHA from GitHub" >&2
     exit 1
 fi
 
-# 6. Update the tap formula to point at the new source tarball + its checksum
+# 6. Update the tap formula to point at the new binary release + its checksum
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 F="$TAP/Formula/quicktodo.rb"
-# Update URL to use auto-generated source tarball (standard Homebrew pattern)
-sed -i '' "s#https://github.com/[^/]*/[^/]*/archive/refs/tags/v[0-9.]*\.tar\.gz#https://github.com/$REPO/archive/refs/tags/v$V.tar.gz#" "$F"
-sed -i '' "s#https://github.com/[^/]*/[^/]*/releases/download/v[0-9.]*\/[^/]*\.tar\.gz#https://github.com/$REPO/archive/refs/tags/v$V.tar.gz#" "$F"
+# Update URL to new version's binary release
+sed -i '' "s#https://github.com/[^/]*/[^/]*/releases/download/v[0-9.]*\/[^/]*\.zip#https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip#" "$F"
 # Match either hex sha256 or the placeholder
 sed -i '' "s/sha256 \"[^\"]*\"/sha256 \"$SRC_SHA\"/" "$F"
 (
