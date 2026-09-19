@@ -46,8 +46,8 @@ echo "This will release v$V:"
 echo "  - Bump version in Info.plist"
 echo "  - Create & merge PR to main"
 echo "  - Tag v$V"
-echo "  - Create GitHub Release with binary zip + source tarball"
-echo "  - Update Homebrew tap"
+echo "  - Create GitHub Release with binary zip + checksum"
+echo "  - Update Homebrew tap (uses GitHub-generated source tarball)"
 read -p "Proceed? [y/N] " confirm || { echo "Aborted."; exit 1; }
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 
@@ -68,23 +68,26 @@ git checkout main
 git fetch origin
 git reset --hard origin/main
 
-# 3. Build the app archive used by the in-app updater before publishing the
-#    tag, so a packaging failure cannot leave an incomplete release.
-CREATE_ARCHIVE=1 ./scripts/package.sh local
+# 3. Build the app archive used by the in-app updater.
+#    Pass version so package.sh uses correct version in bundle.
+MARKETING_VERSION="$V" CURRENT_PROJECT_VERSION="$V" CREATE_ARCHIVE=1 ./scripts/package.sh local
 ARCHIVE="quicktodo.app.zip"
 CHECKSUM="$ARCHIVE.sha256"
 trap 'rm -f "$ARCHIVE" "$CHECKSUM"' EXIT
 
-# 4. Create source tarball for Homebrew formula
-SRC_TARBALL="quicktodo-$V.tar.gz"
-git archive --format=tar.gz --prefix="quicktodo-$V/" "v$V" > "$SRC_TARBALL"
-SRC_SHA=$(shasum -a 256 "$SRC_TARBALL" | awk '{print $1}')
-
-# 5. Tag the release (tags are not branch-protected) and attach both the app
+# 4. Tag the release (tags are not branch-protected) and attach the app
 #    archive and its checksum to the GitHub Release.
 git tag "v$V"
 git push origin "v$V"
-gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM" "$SRC_TARBALL"
+gh release create "v$V" --title "v$V" --generate-notes "$ARCHIVE" "$CHECKSUM"
+
+# 5. Get SHA of GitHub-generated source tarball for Homebrew formula
+SRC_URL="https://github.com/$REPO/archive/refs/tags/v$V.tar.gz"
+SRC_SHA=$(curl -sL "$SRC_URL" | shasum -a 256 | awk '{print $1}')
+if [ -z "$SRC_SHA" ]; then
+    echo "error: failed to fetch source tarball SHA" >&2
+    exit 1
+fi
 
 # 6. Update the tap formula to point at the new source tarball + its checksum
 rm -rf "$TAP"
