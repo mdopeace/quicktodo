@@ -19,7 +19,7 @@ struct TodoView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                HStack(alignment: .bottom) {
+                HStack(alignment: .bottom, spacing: 8) {
                     Text("QuickTodo")
                         .font(.headline)
                     Text("—")
@@ -35,14 +35,13 @@ struct TodoView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 10)
+            .padding(.vertical, 10)
 
             Divider()
                 .padding(.horizontal, 12)
 
             HStack(spacing: 8) {
-                TextField("Start typing to add...", text: $draft)
+                TextField("Start typing...", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
@@ -146,10 +145,9 @@ struct TodoView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Quit")
                 .help("Quit")
-                .padding(.vertical, 6)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .padding(.vertical, 10)
         }
         .frame(width: MenuMetrics.width)  // height hugs content; AppDelegate caps it
     }
