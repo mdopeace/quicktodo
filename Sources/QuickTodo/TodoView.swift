@@ -8,7 +8,7 @@ struct TodoView: View {
     @StateObject private var updater = Updater.shared
     @State private var draft = ""
     @State private var scrollTopTick = 0
-@State private var expandedItems: Set<UUID> = []
+    @State private var expandedItems: Set<UUID> = []
     @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
@@ -104,9 +104,11 @@ struct TodoView: View {
                                         }
                                     },
                                     label: {
-                                        Text("Older than a week (\(store.olderCompletedItems.count))")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                        Text(
+                                            "Older than a week (\(store.olderCompletedItems.count))"
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                     }
                                 )
                                 .padding(.horizontal, 12)
@@ -228,7 +230,9 @@ struct TodoView: View {
                 }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(expandedItems.contains(item.id) ? "Collapse" : "Expand")
-                .accessibilityHint("Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item")
+                .accessibilityHint(
+                    "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
+                )
             Spacer(minLength: 8)
             Button {
                 withAnimation(rowAnimation) {
