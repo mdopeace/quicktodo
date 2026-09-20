@@ -19,8 +19,13 @@ struct TodoView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("QuickTodo")
-                    .font(.headline)
+                HStack(alignment: .center) {
+                    Text("QuickTodo")
+                        .font(.headline)
+                    Text("(v\(appVersion))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Text("⌘⌥T")
                     .font(.caption)
@@ -119,18 +124,18 @@ struct TodoView: View {
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
                 Spacer()
-                if updater.state != .idle {
-                    UpdateIndicator(state: updater.state) {
-                        switch updater.state {
-                        case .available: updater.downloadAndInstall()
-                        case .error: updater.checkManually()
-                        default: break
-                        }
+                UpdateIndicator(state: updater.state) {
+                    switch updater.state {
+                    case .available: updater.downloadAndInstall()
+                    case .error, .idle: updater.checkManually()
+                    default: break
                     }
-                    .help(updater.state.helpText)
-                    .transition(.opacity.combined(with: .scale))
                 }
-                Button { NSApp.terminate(nil) } label: {
+                .help(updater.state.helpText)
+                .transition(.opacity.combined(with: .scale))
+                Button {
+                    NSApp.terminate(nil)
+                } label: {
                     Image(systemName: "power")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -143,7 +148,7 @@ struct TodoView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
         }
-        .frame(width: MenuMetrics.width) // height hugs content; AppDelegate caps it
+        .frame(width: MenuMetrics.width)  // height hugs content; AppDelegate caps it
     }
 
     private func submit() {
@@ -206,6 +211,11 @@ struct UpdateIndicator: View {
     let action: () -> Void
 
     @State private var rotation = 0.0
+    @State private var pulseOpacity = 1.0
+
+    private var isPulsing: Bool {
+        [Updater.State.available, .downloading, .error].contains(state)
+    }
 
     var body: some View {
         Button(action: action) {
@@ -213,44 +223,46 @@ struct UpdateIndicator: View {
                 .font(.caption)
                 .foregroundStyle(iconColor)
                 .rotationEffect(.degrees(rotation))
+                .opacity(pulseOpacity)
                 .animation(
-                    state == .checking ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                    state == .checking
+                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                        : (state == .installing
+                            ? .linear(duration: 1).repeatForever(autoreverses: false)
+                            : .default),
                     value: rotation
                 )
-                .opacity(state == .available ? 1 : 1)
                 .animation(
-                    state == .available ? .easeInOut(duration: 1).repeatForever(autoreverses: true) : .default,
-                    value: state == .available
+                    isPulsing
+                        ? .easeInOut(duration: 1).repeatForever(autoreverses: true)
+                        : .default,
+                    value: pulseOpacity
                 )
-                .onAppear {
-                    if state == .checking {
-                        rotation = 360
-                    }
-                }
-                .onChange(of: state) { newState in
-                    if newState == .checking {
-                        rotation = 360
-                    }
-                }
+                .onAppear { updateAnimations() }
+                .onChange(of: state) { _ in updateAnimations() }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private func updateAnimations() {
+        if state == .checking || state == .installing {
+            rotation = 360
+        }
+        pulseOpacity = isPulsing ? 0.6 : 1.0
+    }
+
     var iconName: String {
         switch state {
-        case .checking: "arrow.clockwise.circle"
-        case .available: "arrow.down.circle"
-        case .downloading: "arrow.down.circle"
+        case .checking, .idle, .error: "arrow.clockwise.circle"
+        case .available, .downloading: "arrow.down.circle"
         case .installing: "gear.circle"
-        case .error: "exclamationmark.triangle"
-        case .idle: ""
         }
     }
 
     var iconColor: Color {
         switch state {
-        case .available: .blue
+        case .available, .downloading, .installing: .blue
         case .error: .orange
         default: .secondary
         }
@@ -262,8 +274,8 @@ struct UpdateIndicator: View {
         case .available: "Update available"
         case .downloading: "Downloading update"
         case .installing: "Installing update"
-        case .error: "Update error"
-        case .idle: ""
+        case .error: "Update error - click to retry"
+        case .idle: "Check for updates"
         }
     }
 }

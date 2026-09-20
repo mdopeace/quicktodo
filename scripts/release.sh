@@ -55,10 +55,14 @@ read -p "Proceed? [y/N] " confirm || { echo "Aborted."; exit 1; }
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" Info.plist
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $V" Info.plist
 
-# 2. Push the version bump to main via a PR (main is branch-protected)
+# 2. Bump version in Version.swift (shared constant for CLI + UI)
+sed -i '' "s/^public let appVersion = \".*\"/public let appVersion = \"$V\"/" Sources/QuickTodoCore/Version.swift
+grep -q "appVersion = \"$V\"" Sources/QuickTodoCore/Version.swift || { echo "Version.swift update failed"; exit 1; }
+
+# 3. Push the version bump to main via a PR (main is branch-protected)
 BR="release/v$V"
 git checkout -b "$BR"
-git add Info.plist
+git add Info.plist Sources/QuickTodoCore/Version.swift
 git commit -m "Bump version to $V"
 git push -u origin "$BR"
 gh pr create --base main --head "$BR" --title "Release v$V" \

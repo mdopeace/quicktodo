@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import QuickTodoCore
 
 final class Updater: ObservableObject {
     static let shared = Updater()
@@ -14,7 +15,7 @@ final class Updater: ObservableObject {
     enum State { case idle, checking, available, downloading, installing, error }
 
     private let repo = "mdopeace/quicktodo"
-    private let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+    private let currentVersion = appVersion
     private var checkTimer: Timer?
     private var downloads: [URL: URLSessionDownloadTask] = [:]
 
@@ -328,7 +329,7 @@ extension Updater.State {
         case .downloading: return "Downloading update…"
         case .installing: return "Installing update…"
         case .error: return "Error: \(Updater.shared.errorMessage ?? "Unknown")"
-        case .idle: return ""
+        case .idle: return "Check for updates"
         }
     }
 }
