@@ -51,7 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         hotKeys.onHotKey = { [weak self] in self?.openMenu() }
         hotKeys.register()
+
+        #if !DEBUG
         registerLaunchAtLogin()
+        #endif
 
         // Start auto-update check on launch (background, non-blocking)
         Updater.shared.checkOnLaunch()
