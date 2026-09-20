@@ -1,6 +1,8 @@
 import QuickTodoCore
 import SwiftUI
 
+private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
+
 struct TodoView: View {
     @ObservedObject var store: TodoStore
     @StateObject private var updater = Updater.shared
@@ -150,7 +152,9 @@ struct TodoView: View {
         let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
         guard !title.isEmpty else { return }
-        store.add(title)
+        withAnimation(rowAnimation) {
+            store.add(title)
+        }
         scrollTopTick += 1
     }
 
@@ -169,7 +173,9 @@ struct TodoView: View {
     private func row(_ item: TodoItem) -> some View {
         HStack(spacing: 8) {
             Button {
-                store.toggle(item.id)
+                withAnimation(rowAnimation) {
+                    store.toggle(item.id)
+                }
             } label: {
                 Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
             }
@@ -181,7 +187,9 @@ struct TodoView: View {
                 .truncationMode(.tail)
             Spacer(minLength: 8)
             Button {
-                store.delete(item.id)
+                withAnimation(rowAnimation) {
+                    store.delete(item.id)
+                }
             } label: {
                 Image(systemName: "xmark")
             }
