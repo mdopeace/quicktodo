@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import CryptoKit
 import QuickTodoCore
 
 final class Updater: ObservableObject {
@@ -10,6 +11,7 @@ final class Updater: ObservableObject {
     @Published private(set) var releaseVersion: String?
     @Published private(set) var releaseURL: URL?
     @Published private(set) var releaseChecksum: String?
+    @Published private(set) var releaseAssetID: Int?
     @Published private(set) var errorMessage: String?
 
     enum State { case idle, checking, available, downloading, installing, error }
@@ -49,14 +51,29 @@ final class Updater: ObservableObject {
         guard state == .available, let url = releaseURL else { return }
         state = .downloading
 
-        let zipURL = FileManager.default.temporaryDirectory.appendingPathComponent("quicktodo_update.zip")
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quicktodo-update-\(UUID().uuidString)", isDirectory: true)
+        let zipURL = tempDir.appendingPathComponent("quicktodo.app.zip")
+
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            DispatchQueue.main.async {
+                self.state = .error
+                self.errorMessage = "Could not prepare update: \(error.localizedDescription)"
+                if self.isManual { self.resetAfterDelay() }
+            }
+            return
+        }
 
         downloadFile(from: url, to: zipURL) { [weak self] result in
             guard let self = self else { return }
             switch result {
             case .success:
-                self.verifyAndInstall(zipURL: zipURL)
+                self.verifyAndInstall(zipURL: zipURL, tempDir: tempDir)
             case .failure(let error):
+                self.cleanup(tempDir)
+                self.clearReleaseState()
                 DispatchQueue.main.async {
                     self.state = .error
                     self.errorMessage = "Download failed: \(error.localizedDescription)"
@@ -64,6 +81,17 @@ final class Updater: ObservableObject {
                 }
             }
         }
+    }
+
+    private func cleanup(_ url: URL) {
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func clearReleaseState() {
+        releaseVersion = nil
+        releaseURL = nil
+        releaseChecksum = nil
+        releaseAssetID = nil
     }
 
     /// Returns the .app bundle URL for the current running app
@@ -137,6 +165,7 @@ final class Updater: ObservableObject {
             let tag_name: String
             let assets: [Asset]
             struct Asset: Decodable {
+                let id: Int
                 let name: String
                 let browser_download_url: String
             }
@@ -166,22 +195,43 @@ final class Updater: ObservableObject {
                 return
             }
 
-            // Try to get checksum asset
-            var checksum: String?
+            // Download checksum asynchronously (like vidp does) - follows redirects properly
             if let checksumAsset = release.assets.first(where: { $0.name == "quicktodo.app.zip.sha256" }),
                let checksumURL = URL(string: checksumAsset.browser_download_url) {
-                // Fetch checksum synchronously (small file)
-                if let checksumData = try? Data(contentsOf: checksumURL),
-                   let checksumStr = String(data: checksumData, encoding: .utf8) {
-                    checksum = checksumStr.split(separator: " ").first.map(String.init)
-                }
+                URLSession.shared.dataTask(with: checksumURL) { [weak self] data, _, error in
+                    guard let self = self else { return }
+                    var checksum: String?
+                    var checksumError: Error?
+                    if let data = data, error == nil,
+                       let checksumStr = String(data: data, encoding: .utf8) {
+                        checksum = checksumStr.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\r" || $0 == "\t" }).first.map(String.init)
+                    } else if let error = error {
+                        checksumError = error
+                    }
+                    DispatchQueue.main.async {
+                        if let checksumError = checksumError {
+                            // Checksum fetch failed - don't set available, show error for manual checks
+                            self.handleError(checksumError, manual: manual)
+                        } else {
+                            self.state = .available
+                            self.releaseVersion = String(latestVersion)
+                            self.releaseURL = downloadURL
+                            self.releaseAssetID = asset.id
+                            self.releaseChecksum = checksum
+                            self.errorMessage = nil
+                        }
+                    }
+                }.resume()
+                return
             }
 
+            // No checksum asset
             DispatchQueue.main.async {
                 self.state = .available
                 self.releaseVersion = String(latestVersion)
                 self.releaseURL = downloadURL
-                self.releaseChecksum = checksum
+                self.releaseAssetID = asset.id
+                self.releaseChecksum = nil
                 self.errorMessage = nil
             }
 
@@ -191,7 +241,9 @@ final class Updater: ObservableObject {
     }
 
     private func downloadFile(from url: URL, to destination: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        let task = URLSession.shared.downloadTask(with: url) { localURL, _, error in
+        let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
+            guard let self = self else { return }
+            self.downloads.removeValue(forKey: url)
             if let error = error {
                 completion(.failure(error))
                 return
@@ -214,28 +266,21 @@ final class Updater: ObservableObject {
         downloads[url] = task
     }
 
-    private func verifyAndInstall(zipURL: URL) {
+    private func verifyAndInstall(zipURL: URL, tempDir: URL) {
         guard let expectedChecksum = releaseChecksum else {
-            // No checksum available, proceed with warning
-            install(zipURL: zipURL)
+            install(zipURL: zipURL, tempDir: tempDir)
             return
         }
 
-        let checksumTask = Process()
-        checksumTask.executableURL = URL(fileURLWithPath: "/usr/bin/shasum")
-        checksumTask.arguments = ["-a", "256", zipURL.path]
-        let pipe = Pipe()
-        checksumTask.standardOutput = pipe
-
+        // Verify checksum using Swift CryptoKit (like vidp does) instead of shelling out
         do {
-            try checksumTask.run()
-            checksumTask.waitUntilExit()
-            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let actualChecksum = output.split(separator: " ").first.map(String.init) ?? ""
-
-            if actualChecksum.lowercased() == expectedChecksum.lowercased() {
-                install(zipURL: zipURL)
+            let data = try Data(contentsOf: zipURL)
+            let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            if actual.caseInsensitiveCompare(expectedChecksum) == .orderedSame {
+                install(zipURL: zipURL, tempDir: tempDir)
             } else {
+                cleanup(tempDir)
+                clearReleaseState()
                 DispatchQueue.main.async {
                     self.state = .error
                     self.errorMessage = "Checksum mismatch. Update may be corrupted."
@@ -243,6 +288,8 @@ final class Updater: ObservableObject {
                 }
             }
         } catch {
+            cleanup(tempDir)
+            clearReleaseState()
             DispatchQueue.main.async {
                 self.state = .error
                 self.errorMessage = "Checksum verification failed: \(error.localizedDescription)"
@@ -251,11 +298,13 @@ final class Updater: ObservableObject {
         }
     }
 
-    private func install(zipURL: URL) {
+    private func install(zipURL: URL, tempDir: URL) {
         DispatchQueue.main.async { self.state = .installing }
 
         // In-place update: extract to current app bundle's parent directory
         guard let appBundle = currentAppBundleURL else {
+            cleanup(tempDir)
+            clearReleaseState()
             DispatchQueue.main.async {
                 self.state = .error
                 self.errorMessage = "Could not locate app bundle for update"
@@ -266,42 +315,59 @@ final class Updater: ObservableObject {
         
         let destDir = appBundle.deletingLastPathComponent().path
         
-        // Check if the bundle itself is writable (avoids admin prompt for user-writable locations)
-        let needsAdmin = !FileManager.default.isWritableFile(atPath: appBundle.path)
+        // Extract using ditto (like vidp does)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = ["-x", "-k", zipURL.path, destDir]
+        let pipe = Pipe()
+        process.standardError = pipe
 
-        // Escape single quotes for safe shell interpolation
-        func shEscape(_ path: String) -> String {
-            return path.replacingOccurrences(of: "'", with: "'\\''")
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                cleanup(tempDir)
+                clearReleaseState()
+                DispatchQueue.main.async {
+                    self.state = .error
+                    self.errorMessage = output.isEmpty ? "The app archive could not be extracted." : output
+                    self.resetAfterDelay()
+                }
+                return
+            }
+        } catch {
+            cleanup(tempDir)
+            clearReleaseState()
+            DispatchQueue.main.async {
+                self.state = .error
+                self.errorMessage = "Extraction failed: \(error.localizedDescription)"
+                self.resetAfterDelay()
+            }
+            return
         }
-        let zipPath = shEscape(zipURL.path)
-        let destPath = shEscape(destDir)
-        let bundlePath = shEscape(appBundle.path)
 
-        let script = """
-        do shell script "ditto -xk '\(zipPath)' '\(destPath)/' && xattr -dr com.apple.quarantine '\(bundlePath)'" \(needsAdmin ? "with administrator privileges" : "")
-        """
+        // Remove quarantine attribute
+        let xattrProcess = Process()
+        xattrProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+        xattrProcess.arguments = ["-dr", "com.apple.quarantine", appBundle.path]
+        try? xattrProcess.run()
+        xattrProcess.waitUntilExit()
 
-        let appleScript = NSAppleScript(source: script)
-        var errorDict: NSDictionary?
-        appleScript?.executeAndReturnError(&errorDict)
+        cleanup(tempDir)
 
         DispatchQueue.main.async {
-            if let errorDict = errorDict {
-                self.state = .error
-                self.errorMessage = "Install failed: \(errorDict[NSAppleScript.errorMessage] as? String ?? "Unknown error")"
-                if self.isManual { self.resetAfterDelay() }
-            } else {
-                self.state = .idle
-                self.releaseVersion = nil
-                self.releaseURL = nil
-                self.releaseChecksum = nil
-                // Relaunch from the same bundle location (use .app directory, not executable)
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                task.arguments = [appBundle.path]
-                try? task.run()
-                NSApplication.shared.terminate(nil)
-            }
+            self.state = .idle
+            self.releaseVersion = nil
+            self.releaseURL = nil
+            self.releaseChecksum = nil
+            self.releaseAssetID = nil
+            // Relaunch from the same bundle location (use .app directory, not executable)
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = [appBundle.path]
+            try? task.run()
+            NSApplication.shared.terminate(nil)
         }
     }
 
