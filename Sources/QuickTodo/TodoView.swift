@@ -19,22 +19,29 @@ struct TodoView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("QuickTodo")
-                    .font(.headline)
+                HStack(alignment: .bottom, spacing: 8) {
+                    Text("QuickTodo")
+                        .font(.headline)
+                    Text("—")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("v\(appVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Text("⌘⌥T")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 10)
+            .padding(.vertical, 10)
 
             Divider()
                 .padding(.horizontal, 12)
 
             HStack(spacing: 8) {
-                TextField("Start typing to add...", text: $draft)
+                TextField("Start typing...", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
@@ -119,18 +126,18 @@ struct TodoView: View {
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
                 Spacer()
-                if updater.state != .idle {
-                    UpdateIndicator(state: updater.state) {
-                        switch updater.state {
-                        case .available: updater.downloadAndInstall()
-                        case .error: updater.checkManually()
-                        default: break
-                        }
+                UpdateIndicator(state: updater.state) {
+                    switch updater.state {
+                    case .available: updater.downloadAndInstall()
+                    case .error, .idle: updater.checkManually()
+                    default: break
                     }
-                    .help(updater.state.helpText)
-                    .transition(.opacity.combined(with: .scale))
                 }
-                Button { NSApp.terminate(nil) } label: {
+                .help(updater.state.helpText)
+                .transition(.opacity.combined(with: .scale))
+                Button {
+                    NSApp.terminate(nil)
+                } label: {
                     Image(systemName: "power")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -138,12 +145,11 @@ struct TodoView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Quit")
                 .help("Quit")
-                .padding(.vertical, 6)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .padding(.vertical, 10)
         }
-        .frame(width: MenuMetrics.width) // height hugs content; AppDelegate caps it
+        .frame(width: MenuMetrics.width)  // height hugs content; AppDelegate caps it
     }
 
     private func submit() {
@@ -205,52 +211,57 @@ struct UpdateIndicator: View {
     let state: Updater.State
     let action: () -> Void
 
-    @State private var rotation = 0.0
+    @State private var spinTrigger = 0
+    @State private var pulseOpacity = 1.0
+
+    private var isPulsing: Bool {
+        [Updater.State.available, .downloading].contains(state)
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: iconName)
                 .font(.caption)
                 .foregroundStyle(iconColor)
-                .rotationEffect(.degrees(rotation))
+                .rotationEffect(.degrees(state == .checking || state == .installing ? 360 : 0))
+                .opacity(pulseOpacity)
                 .animation(
-                    state == .checking ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
-                    value: rotation
+                    (state == .checking || state == .installing)
+                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                        : .default,
+                    value: spinTrigger
                 )
-                .opacity(state == .available ? 1 : 1)
                 .animation(
-                    state == .available ? .easeInOut(duration: 1).repeatForever(autoreverses: true) : .default,
-                    value: state == .available
+                    isPulsing
+                        ? .easeInOut(duration: 1).repeatForever(autoreverses: true)
+                        : .default,
+                    value: pulseOpacity
                 )
-                .onAppear {
-                    if state == .checking {
-                        rotation = 360
-                    }
-                }
-                .onChange(of: state) { newState in
-                    if newState == .checking {
-                        rotation = 360
-                    }
-                }
+                .onAppear { updateAnimations() }
+                .onChange(of: state) { _ in updateAnimations() }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private func updateAnimations() {
+        if state == .checking || state == .installing {
+            spinTrigger += 1
+        }
+        pulseOpacity = isPulsing ? 0.6 : 1.0
+    }
+
     var iconName: String {
         switch state {
-        case .checking: "arrow.clockwise.circle"
-        case .available: "arrow.down.circle"
-        case .downloading: "arrow.down.circle"
+        case .checking, .idle, .error: "arrow.clockwise.circle"
+        case .available, .downloading: "arrow.down.circle"
         case .installing: "gear.circle"
-        case .error: "exclamationmark.triangle"
-        case .idle: ""
         }
     }
 
     var iconColor: Color {
         switch state {
-        case .available: .blue
+        case .available, .downloading, .installing: .blue
         case .error: .orange
         default: .secondary
         }
@@ -262,8 +273,8 @@ struct UpdateIndicator: View {
         case .available: "Update available"
         case .downloading: "Downloading update"
         case .installing: "Installing update"
-        case .error: "Update error"
-        case .idle: ""
+        case .error: "Update error - click to retry"
+        case .idle: "Check for updates"
         }
     }
 }
