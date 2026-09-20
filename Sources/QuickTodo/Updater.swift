@@ -18,6 +18,8 @@ final class Updater: ObservableObject {
     private let currentVersion = appVersion
     private var checkTimer: Timer?
     private var downloads: [URL: URLSessionDownloadTask] = [:]
+    private var lastManualCheckTime: Date?
+    private let manualCheckCooldown: TimeInterval = 10
 
     private init() {}
 
@@ -35,6 +37,11 @@ final class Updater: ObservableObject {
     }
 
     func checkManually() {
+        let now = Date()
+        if let last = lastManualCheckTime, now.timeIntervalSince(last) < manualCheckCooldown {
+            return
+        }
+        lastManualCheckTime = now
         checkForUpdates(showCheckingIndicator: true, manual: true)
     }
 

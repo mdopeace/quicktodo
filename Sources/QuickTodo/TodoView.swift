@@ -213,11 +213,11 @@ struct UpdateIndicator: View {
     let state: Updater.State
     let action: () -> Void
 
-    @State private var rotation = 0.0
+    @State private var spinTrigger = 0
     @State private var pulseOpacity = 1.0
 
     private var isPulsing: Bool {
-        [Updater.State.available, .downloading, .error].contains(state)
+        [Updater.State.available, .downloading].contains(state)
     }
 
     var body: some View {
@@ -225,15 +225,13 @@ struct UpdateIndicator: View {
             Image(systemName: iconName)
                 .font(.caption)
                 .foregroundStyle(iconColor)
-                .rotationEffect(.degrees(rotation))
+                .rotationEffect(.degrees(state == .checking || state == .installing ? 360 : 0))
                 .opacity(pulseOpacity)
                 .animation(
-                    state == .checking
+                    (state == .checking || state == .installing)
                         ? .linear(duration: 1).repeatForever(autoreverses: false)
-                        : (state == .installing
-                            ? .linear(duration: 1).repeatForever(autoreverses: false)
-                            : .default),
-                    value: rotation
+                        : .default,
+                    value: spinTrigger
                 )
                 .animation(
                     isPulsing
@@ -250,7 +248,7 @@ struct UpdateIndicator: View {
 
     private func updateAnimations() {
         if state == .checking || state == .installing {
-            rotation = 360
+            spinTrigger += 1
         }
         pulseOpacity = isPulsing ? 0.6 : 1.0
     }
