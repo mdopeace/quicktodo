@@ -113,13 +113,13 @@ class Quicktodo < Formula
   def caveats
     <<~EOS
       quicktodo.app installed to:
-        \#{opt_libexec}/quicktodo.app
+        $(brew --prefix quicktodo)/libexec/quicktodo.app
 
       To launch it:
-        open "\#{opt_libexec}/quicktodo.app"
+        open "$(brew --prefix quicktodo)/libexec/quicktodo.app"
 
       To add to /Applications:
-        cp -R "\#{opt_libexec}/quicktodo.app" /Applications/
+        cp -R "$(brew --prefix quicktodo)/libexec/quicktodo.app" /Applications/
     EOS
   end
 
