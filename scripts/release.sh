@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO=mdopeace/quicktodo            # app repo (origin)
-TAP=mdopeace/homebrew-quicktodo    # tap repo containing Formula/quicktodo.rb
+TAP=mdopeace/homebrew-quicktodo    # tap repo containing Formula/quicktodo.rb (binary distribution only)
 
 cd "$(dirname "$0")/.."
 
@@ -90,64 +90,7 @@ if [ "$HTTP_CODE" != "200" ]; then
 fi
 BINARY_SHA=$(curl -sL "$BINARY_URL" | shasum -a 256 | awk '{print $1}')
 
-# Get SHA from the source tarball (for main repo formula)
-SOURCE_URL="https://github.com/$REPO/archive/refs/tags/v$V.tar.gz"
-HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "$SOURCE_URL")
-if [ "$HTTP_CODE" != "200" ]; then
-    echo "error: failed to fetch source tarball (HTTP $HTTP_CODE)" >&2
-    exit 1
-fi
-SOURCE_SHA=$(curl -sL "$SOURCE_URL" | shasum -a 256 | awk '{print $1}')
-
-# 6. Update the main repo Formula/quicktodo.rb (for local dev builds from source)
-cat > Formula/quicktodo.rb <<EOF
-class Quicktodo < Formula
-  desc "Minimal menu-bar todo app for macOS"
-  homepage "https://github.com/mdopeace/quicktodo"
-  url "https://github.com/mdopeace/quicktodo/archive/refs/tags/v$V.tar.gz"
-  sha256 "$SOURCE_SHA"
-
-  depends_on :macos
-  depends_on :xcode => :build
-
-  def install
-    system "./scripts/package.sh", "local"
-    libexec.install "dist/quicktodo.app"
-  end
-
-  def caveats
-    <<~EOS
-      quicktodo.app installed to:
-        \#{opt_libexec}/quicktodo.app
-
-      To launch it:
-        open "\#{opt_libexec}/quicktodo.app"
-
-      To add to /Applications:
-        cp -R "\#{opt_libexec}/quicktodo.app" /Applications/
-    EOS
-  end
-
-  test do
-    assert_predicate opt_libexec/"quicktodo.app/Contents/MacOS/QuickTodo", :executable?
-  end
-end
-EOF
-
-# Push main repo Formula update via PR (main is branch-protected)
-BR_FORMULA="formula/v$V"
-git checkout -b "$BR_FORMULA"
-git add Formula/quicktodo.rb
-git commit -m "chore: update Formula to v$V"
-git push -u origin "$BR_FORMULA"
-gh pr create --base main --head "$BR_FORMULA" --title "chore: update Formula to v$V" \
-    --body "Updates main repo Formula to v$V for source builds." >/dev/null
-gh pr merge --merge --delete-branch
-git checkout main
-git fetch origin
-git reset --hard origin/main
-
-# 7. Update the tap formula to point at the new binary release + its checksum
+# 6. Update the tap formula to point at the new binary release + its checksum
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 F="$TAP/Formula/quicktodo.rb"
