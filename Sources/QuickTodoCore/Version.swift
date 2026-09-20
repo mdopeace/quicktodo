@@ -1,2 +1,2 @@
 // Auto-generated version — keep in sync with Info.plist CFBundleShortVersionString
-public let appVersion = "1.1.4"
+public let appVersion = "1.2.0"
