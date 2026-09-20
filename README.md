@@ -1,53 +1,88 @@
-# quicktodo
+# QuickTodo
 
-A minimal menu-bar todo app for macOS (Swift/SwiftUI).
+A minimal menu-bar todo app for macOS, written in Swift/SwiftUI.
+No Electron, no bloat — just a fast native app that lives in your menu bar.
+
+## Install
+
+### via Homebrew (recommended)
+
+```sh
+brew tap mdopeace/quicktodo
+brew install quicktodo
+```
+
+To update to a newer release:
+
+```sh
+brew update && brew upgrade quicktodo
+```
+
+Then launch:
+
+```sh
+open "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app"
+```
+
+To copy it into `/Applications`, replacing the existing `quicktodo.app` there:
+
+```sh
+cp -R "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app" /Applications/
+```
+
+The app checks for updates automatically on launch and when opening the menu. When an update is available, a download button (⬇️) appears in the menu footer — click it to download and install the update in-place.
+
+### from source
+
+Requires [Homebrew](https://brew.sh) and Xcode Command Line Tools (`swift`, `xcrun`):
+
+```sh
+git clone https://github.com/mdopeace/quicktodo
+cd quicktodo
+./scripts/package.sh local
+open dist/quicktodo.app
+```
 
 ## Requirements
 
-- macOS 13+
-- Xcode Command Line Tools (`swift`, `xcrun`)
+- macOS 13+ (Apple Silicon or Intel)
+- Xcode Command Line Tools
 
-## Layout
+## Features
 
-- `Package.swift` — SwiftPM (app + `QuickTodoCore` + tests)
-- `Sources/QuickTodo/` — app entry, UI
-- `Sources/QuickTodoCore/` — `TodoStore` (tested logic)
-- `Tests/` — `swift test`
-- `Assets.xcassets/` — AppIcon (App Store asset catalog, not raw `.icns`)
-- `Info.plist` — bundle metadata (single source of truth, copied by `scripts/package.sh`)
-- `QuickTodo.entitlements` — App Sandbox entitlements used by local and release builds
-- `scripts/package.sh` — builds and validates local or release bundles
+- Native SwiftUI menu-bar UI
+- Add, toggle, delete todos with keyboard
+- Progress tracker (completed/total)
+- Day-grouped list with "Completed" section
+- Global hotkey (⌘⌥T) to open menu
+- Launch at login support
+- Auto-updates via GitHub API (automatic check on launch/menu-open; when update available, footer shows ⬇️ to download & install in-place)
+- Ad-hoc signed, sandboxed
 
-## Build & test
+## Notes
 
-```sh
-swift test
-./scripts/package.sh                 # local ad-hoc bundle
-MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 ./scripts/package.sh local
-```
+- The app is ad-hoc signed for local use. It is not notarized, so the first
+  launch of a downloaded copy may require right-click → Open (or
+  `xattr -dr com.apple.quarantine /Applications/quicktodo.app`).
+- Contributions and issues are welcome, but `main` is branch-protected —
+  please open a pull request.
 
-## App Store release
+## License
 
-- Register `com.mdopeace.quicktodo` in the Apple Developer account and create
-  the matching App Store Connect app record.
-- Install the Apple distribution certificate and provisioning profile on the
-  release Mac. Do not commit signing credentials or profiles to this repo.
-- Build a signed release bundle after configuring the signing identity:
+[MIT](LICENSE) © 2026 Md Mostafijur Rahman.
 
-  ```sh
-  SIGNING_IDENTITY="Apple Distribution: Name (TEAMID)" \
-  MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION=1 \
-  ./scripts/package.sh release
-  ```
+## Links
 
-- Inspect the resulting signature and entitlements, then upload the signed
-  artifact using the configured Xcode/App Store Connect workflow.
-- Complete App Store Connect screenshots, description, category, support URL,
-  privacy answers, age rating, and pricing before submission.
-- Test the signed app on macOS 13 and the current supported macOS release.
+- Homebrew tap: [mdopeace/homebrew-quicktodo](https://github.com/mdopeace/homebrew-quicktodo)
+- Releases: <https://github.com/mdopeace/quicktodo/releases>
 
-The package script's default local mode is ad-hoc signed. Release mode fails if
-`SIGNING_IDENTITY` is not configured, so an unsigned or accidentally ad-hoc
-artifact is not treated as a submission build.
+## Releases
 
-- `main` is branch-protected — please open a pull request.
+Changes ship to Homebrew users as versioned releases, not per-commit. To cut a
+release, run `./scripts/release.sh` — it reads the current version from `Info.plist`,
+presents a Patch/Minor/Major selector (via a bash `select` menu),
+and handles the full release flow (bump, PR, tag, GitHub Release, tap update).
+
+Requires: [gh](https://cli.github.com) (authenticated).
+
+Users then update with `brew update && brew upgrade quicktodo`.
