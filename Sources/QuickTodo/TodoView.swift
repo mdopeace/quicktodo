@@ -8,6 +8,7 @@ struct TodoView: View {
     @StateObject private var updater = Updater.shared
     @State private var draft = ""
     @State private var scrollTopTick = 0
+    @State private var expandedItems: Set<UUID> = []
     @FocusState private var inputFocused: Bool
 
     private var progressValue: Double {
@@ -59,8 +60,13 @@ struct TodoView: View {
             .onReceive(NotificationCenter.default.publisher(for: .quickTodoMenuWillOpen)) { _ in
                 draft = ""
                 inputFocused = false
+                expandedItems.removeAll()
                 scrollTopTick += 1
                 DispatchQueue.main.async { inputFocused = true }
+            }
+            .onChange(of: store.items) { newItems in
+                let currentIDs = Set(newItems.map(\.id))
+                expandedItems = expandedItems.intersection(currentIDs)
             }
 
             Divider()
@@ -189,8 +195,22 @@ struct TodoView: View {
             Text(item.title)
                 .strikethrough(item.isDone)
                 .foregroundStyle(item.isDone ? .secondary : .primary)
-                .lineLimit(2)
+                .lineLimit(expandedItems.contains(item.id) ? nil : 1)
                 .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(rowAnimation) {
+                        if expandedItems.contains(item.id) {
+                            expandedItems.remove(item.id)
+                        } else {
+                            expandedItems.insert(item.id)
+                        }
+                    }
+                }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(expandedItems.contains(item.id) ? "Collapse" : "Expand")
+                .accessibilityHint("Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item")
             Spacer(minLength: 8)
             Button {
                 withAnimation(rowAnimation) {
