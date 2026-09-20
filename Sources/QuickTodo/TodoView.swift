@@ -19,10 +19,13 @@ struct TodoView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                HStack(alignment: .center) {
+                HStack(alignment: .bottom) {
                     Text("QuickTodo")
                         .font(.headline)
-                    Text("(v\(appVersion))")
+                    Text("—")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("v\(appVersion)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
