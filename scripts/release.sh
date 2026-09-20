@@ -151,8 +151,41 @@ git reset --hard origin/main
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 F="$TAP/Formula/quicktodo.rb"
-sed -i '' "s#releases/download/v[0-9.]*\.zip#releases/download/v$V/quicktodo.app.zip#" "$F"
-sed -i '' "s/sha256 \"[0-9a-f]*\"/sha256 \"$BINARY_SHA\"/" "$F"
+# Ensure formula uses libexec.install (not prefix) and correct caveats/test
+cat > "$F" <<EOF
+class Quicktodo < Formula
+  desc "Minimal menu-bar todo app for macOS"
+  homepage "https://github.com/mdopeace/quicktodo"
+  url "https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
+  sha256 "$BINARY_SHA"
+
+  depends_on :macos
+
+  def install
+    # Extract zip manually to handle the quicktodo.app/ structure
+    system "unzip", "-q", cached_download, "-d", "."
+    libexec.install "quicktodo.app"
+  end
+
+  def caveats
+    <<~EOS
+      quicktodo.app installed to:
+        \#{opt_libexec}/quicktodo.app
+
+      To launch it:
+        open "\#{opt_libexec}/quicktodo.app"
+
+      To add to /Applications:
+        cp -R "\#{opt_libexec}/quicktodo.app" /Applications/
+    EOS
+  end
+
+  test do
+    assert_predicate opt_libexec/"quicktodo.app/Contents/MacOS/QuickTodo", :executable?
+  end
+end
+EOF
+
 (
     cd "$TAP"
     git checkout -b "quicktodo-v$V"
