@@ -48,7 +48,7 @@ final class Updater: ObservableObject {
     }
 
     func downloadAndInstall() {
-        guard state == .available, let url = releaseURL else { return }
+        guard state == .available, let assetID = releaseAssetID else { return }
         state = .downloading
 
         let tempDir = FileManager.default.temporaryDirectory
@@ -66,7 +66,7 @@ final class Updater: ObservableObject {
             return
         }
 
-        downloadFile(from: url, to: zipURL) { [weak self] result in
+        downloadFileViaAPI(assetID: assetID, to: zipURL) { [weak self] result in
             guard let self = self else { return }
             switch result {
             case .success:
@@ -81,6 +81,37 @@ final class Updater: ObservableObject {
                 }
             }
         }
+    }
+
+    private func downloadFileViaAPI(assetID: Int, to destination: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        let apiURL = URL(string: "https://api.github.com/repos/\(repo)/releases/assets/\(assetID)")!
+        var request = URLRequest(url: apiURL)
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
+        let task = URLSession.shared.downloadTask(with: request) { [weak self] localURL, _, error in
+            guard let self = self else { return }
+            self.downloads.removeValue(forKey: apiURL)
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let localURL = localURL else {
+                completion(.failure(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "No local file"])))
+                return
+            }
+            do {
+                try FileManager.default.removeItem(at: destination)
+            } catch {}
+            do {
+                try FileManager.default.moveItem(at: localURL, to: destination)
+                completion(.success(()))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+        task.resume()
+        downloads[apiURL] = task
     }
 
     private func cleanup(_ url: URL) {
