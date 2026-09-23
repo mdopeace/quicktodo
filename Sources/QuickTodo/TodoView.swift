@@ -12,19 +12,15 @@ struct TodoView: View {
     @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
-    private var currentDone: Int {
-        store.recentCompletedItems.count
-    }
-    private var currentTotal: Int {
-        store.items.count - store.olderCompletedItems.count
+    private var totalDone: Int {
+        store.items.filter(\.isDone).count
     }
     private var olderDone: Int {
         store.olderCompletedItems.count
     }
     private var progressValue: Double {
         guard !store.items.isEmpty else { return 0 }
-        let done = Double(store.items.filter(\.isDone).count)
-        return done / Double(store.items.count)
+        return Double(totalDone) / Double(store.items.count)
     }
 
     var body: some View {
@@ -165,7 +161,7 @@ struct TodoView: View {
                             .fill(progressValue >= 1 ? .green : .blue)
                             .frame(width: 44 * CGFloat(progressValue), height: 6)
                     }
-                    Text("\(currentDone)/\(currentTotal) (\(olderDone))")
+                    Text("\(totalDone)/\(store.items.count) (\(olderDone))")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
