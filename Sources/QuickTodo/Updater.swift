@@ -4,6 +4,16 @@ import AppKit
 import CryptoKit
 import QuickTodoCore
 
+enum UpdaterError: Int, Error, CaseIterable {
+    static let domain = "UpdaterError"
+    case checksumMissing = 1
+    case checksumAssetMissing = 2
+    case bundleValidationFailed = 3
+    case codeSignatureFailed = 4
+    case processTimeout = 5
+    case relaunchFailed = 6
+}
+
 final class Updater: ObservableObject {
     static let shared = Updater()
 
@@ -13,15 +23,22 @@ final class Updater: ObservableObject {
     @Published private(set) var releaseChecksum: String?
     @Published private(set) var releaseAssetID: Int?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var downloadProgress: Double = 0
 
-    enum State { case idle, checking, available, downloading, installing, error }
+    enum State { case idle, checking, available, downloading, installing, error, upToDate }
 
     private let repo = "mdopeace/quicktodo"
     private let currentVersion = appVersion
     private var checkTimer: Timer?
     private var downloads: [URL: URLSessionDownloadTask] = [:]
+    private var downloadObservations: [URL: NSKeyValueObservation] = [:]
     private var lastManualCheckTime: Date?
     private let manualCheckCooldown: TimeInterval = 10
+    private let requestTimeout: TimeInterval = 30
+    private let processTimeout: TimeInterval = 60
+    private var currentCheckTask: URLSessionDataTask?
+    private var currentChecksumTask: URLSessionDataTask?
+    private var isManualCheck = false
 
     private init() {}
 
@@ -39,11 +56,19 @@ final class Updater: ObservableObject {
     }
 
     func checkManually() {
+        // Don't overwrite available update notification
+        if state == .available { return }
+        
         let now = Date()
         if let last = lastManualCheckTime, now.timeIntervalSince(last) < manualCheckCooldown {
+            // Show friendly message instead of silently returning
+            DispatchQueue.main.async {
+                self.state = .error
+                self.errorMessage = "Please wait a moment before checking again"
+                self.resetAfterDelay()
+            }
             return
         }
-        lastManualCheckTime = now
         checkForUpdates(showCheckingIndicator: true, manual: true)
     }
 
@@ -61,7 +86,7 @@ final class Updater: ObservableObject {
             DispatchQueue.main.async {
                 self.state = .error
                 self.errorMessage = "Could not prepare update: \(error.localizedDescription)"
-                if self.isManual { self.resetAfterDelay() }
+                if self.isManualCheck { self.resetAfterDelay() }
             }
             return
         }
@@ -77,7 +102,7 @@ final class Updater: ObservableObject {
                 DispatchQueue.main.async {
                     self.state = .error
                     self.errorMessage = "Download failed: \(error.localizedDescription)"
-                    if self.isManual { self.resetAfterDelay() }
+                    if self.isManualCheck { self.resetAfterDelay() }
                 }
             }
         }
@@ -126,14 +151,16 @@ final class Updater: ObservableObject {
         }
         
         return nil
-    }
+}
 
-    // MARK: - Private
-
-    private var isManual = false
+// MARK: - Private
 
     private func checkForUpdates(showCheckingIndicator: Bool, manual: Bool) {
-        isManual = manual
+        isManualCheck = manual
+
+        // Cancel any in-flight request
+        currentCheckTask?.cancel()
+        currentChecksumTask?.cancel()
 
         if showCheckingIndicator {
             DispatchQueue.main.async { self.state = .checking }
@@ -142,11 +169,20 @@ final class Updater: ObservableObject {
         let url = URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!
         var req = URLRequest(url: url)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = requestTimeout
 
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+        let task = URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
             guard let self = self else { return }
+            self.currentCheckTask = nil
+
+            // Only update cooldown on successful response (not on error)
+            if error == nil, let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                self.lastManualCheckTime = Date()
+            }
 
             if let error = error {
+                // Ignore cancelled requests
+                if (error as NSError).code == NSURLErrorCancelled { return }
                 self.handleError(error, manual: manual)
                 return
             }
@@ -156,8 +192,18 @@ final class Updater: ObservableObject {
                 return
             }
 
+            // Handle rate limiting
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 403 || httpResponse.statusCode == 429 {
+                    self.handleError(NSError(domain: "", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "GitHub API rate limited. Please try again later."]), manual: manual)
+                    return
+                }
+            }
+
             self.parseRelease(data: data, manual: manual)
-        }.resume()
+        }
+        currentCheckTask = task
+        task.resume()
     }
 
     private func parseRelease(data: Data, manual: Bool) {
@@ -173,12 +219,19 @@ final class Updater: ObservableObject {
 
         do {
             let release = try JSONDecoder().decode(Release.self, from: data)
-            let latestVersion = release.tag_name.dropFirst() // remove 'v'
+            
+            // Safely extract version from tag_name (handle both "v1.3.2" and "1.3.2" formats)
+            let latestVersion: String
+            if release.tag_name.hasPrefix("v") {
+                latestVersion = String(release.tag_name.dropFirst())
+            } else {
+                latestVersion = release.tag_name
+            }
 
             guard latestVersion != currentVersion else {
                 DispatchQueue.main.async {
                     if manual {
-                        self.state = .idle
+                        self.state = .upToDate
                         self.errorMessage = "You're on the latest version (\(self.currentVersion))"
                         self.resetAfterDelay()
                     } else {
@@ -190,29 +243,40 @@ final class Updater: ObservableObject {
             }
 
             guard let asset = release.assets.first(where: { $0.name == "quicktodo.app.zip" }),
-                  let downloadURL = URL(string: asset.browser_download_url) else {
-                self.handleError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Release asset not found"]), manual: manual)
+                  let downloadURL = URL(string: asset.browser_download_url),
+                  downloadURL.scheme == "https" else {
+                self.handleError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Release asset not found or invalid URL"]), manual: manual)
                 return
             }
 
             // Download checksum asynchronously (like vidp does) - follows redirects properly
             if let checksumAsset = release.assets.first(where: { $0.name == "quicktodo.app.zip.sha256" }),
-               let checksumURL = URL(string: checksumAsset.browser_download_url) {
-                URLSession.shared.dataTask(with: checksumURL) { [weak self] data, _, error in
+               let checksumURL = URL(string: checksumAsset.browser_download_url),
+               checksumURL.scheme == "https" {
+                let checksumReq = URLRequest(url: checksumURL, timeoutInterval: requestTimeout)
+                currentChecksumTask?.cancel()
+                let task = URLSession.shared.dataTask(with: checksumReq) { [weak self] data, _, error in
                     guard let self = self else { return }
+                    self.currentChecksumTask = nil
                     var checksum: String?
                     var checksumError: Error?
                     if let data = data, error == nil,
                        let checksumStr = String(data: data, encoding: .utf8) {
                         checksum = checksumStr.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\r" || $0 == "\t" }).first.map(String.init)
                     } else if let error = error {
+                        if (error as NSError).code == NSURLErrorCancelled { return }
                         checksumError = error
                     }
                     DispatchQueue.main.async {
                         if let checksumError = checksumError {
-                            // Checksum fetch failed - don't set available, show error for manual checks
+                            self.clearReleaseState()
                             self.handleError(checksumError, manual: manual)
                         } else {
+                            guard let checksum = checksum else {
+                                self.clearReleaseState()
+                                self.handleError(NSError(domain: UpdaterError.domain, code: UpdaterError.checksumMissing.rawValue, userInfo: [NSLocalizedDescriptionKey: "Checksum file was empty"]), manual: manual)
+                                return
+                            }
                             self.state = .available
                             self.releaseVersion = String(latestVersion)
                             self.releaseURL = downloadURL
@@ -221,19 +285,14 @@ final class Updater: ObservableObject {
                             self.errorMessage = nil
                         }
                     }
-                }.resume()
+                }
+                currentChecksumTask = task
+                task.resume()
                 return
             }
 
-            // No checksum asset
-            DispatchQueue.main.async {
-                self.state = .available
-                self.releaseVersion = String(latestVersion)
-                self.releaseURL = downloadURL
-                self.releaseAssetID = asset.id
-                self.releaseChecksum = nil
-                self.errorMessage = nil
-            }
+            // No checksum asset - require checksum for security
+            self.handleError(NSError(domain: UpdaterError.domain, code: UpdaterError.checksumAssetMissing.rawValue, userInfo: [NSLocalizedDescriptionKey: "Release is missing required checksum file"]), manual: manual)
 
         } catch {
             handleError(error, manual: manual)
@@ -241,15 +300,23 @@ final class Updater: ObservableObject {
     }
 
     private func downloadFile(from url: URL, to destination: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
+        var req = URLRequest(url: url)
+        req.timeoutInterval = requestTimeout
+
+        let task = URLSession.shared.downloadTask(with: req) { [weak self] localURL, response, error in
             guard let self = self else { return }
             self.downloads.removeValue(forKey: url)
+            self.downloadObservations.removeValue(forKey: url)
+            self.downloadProgress = 0
+            
             if let error = error {
+                // Ignore cancelled requests
+                if (error as NSError).code == NSURLErrorCancelled { return }
                 completion(.failure(error))
                 return
             }
             guard let localURL = localURL else {
-                completion(.failure(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "No local file"])))
+                completion(.failure(NSError(domain: UpdaterError.domain, code: UpdaterError.bundleValidationFailed.rawValue, userInfo: [NSLocalizedDescriptionKey: "No local file"])))
                 return
             }
             do {
@@ -262,8 +329,17 @@ final class Updater: ObservableObject {
                 completion(.failure(error))
             }
         }
+        
+        // Observe progress
+        let observation = task.progress.observe(\Progress.fractionCompleted) { [weak self] progress, change in
+            DispatchQueue.main.async {
+                self?.downloadProgress = progress.fractionCompleted
+            }
+        }
+        
         task.resume()
         downloads[url] = task
+        downloadObservations[url] = observation
     }
 
     private func verifyAndInstall(zipURL: URL, tempDir: URL) {
@@ -284,7 +360,7 @@ final class Updater: ObservableObject {
                 DispatchQueue.main.async {
                     self.state = .error
                     self.errorMessage = "Checksum mismatch. Update may be corrupted."
-                    if self.isManual { self.resetAfterDelay() }
+                    if self.isManualCheck { self.resetAfterDelay() }
                 }
             }
         } catch {
@@ -293,8 +369,32 @@ final class Updater: ObservableObject {
             DispatchQueue.main.async {
                 self.state = .error
                 self.errorMessage = "Checksum verification failed: \(error.localizedDescription)"
-                if self.isManual { self.resetAfterDelay() }
+                if self.isManualCheck { self.resetAfterDelay() }
             }
+        }
+    }
+
+    // Helper to run Process with timeout
+    private func runProcessWithTimeout(_ process: Process, timeout: TimeInterval? = nil, description: String) throws {
+        let timeoutInterval = timeout ?? processTimeout
+        try process.run()
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var terminated = false
+        
+        DispatchQueue.global(qos: .utility).async {
+            process.waitUntilExit()
+            terminated = true
+            semaphore.signal()
+        }
+        
+        let result = semaphore.wait(timeout: .now() + timeoutInterval)
+        if result == .timedOut {
+            if !terminated {
+                process.terminate()
+                semaphore.wait() // Wait for termination to complete
+            }
+            throw NSError(domain: UpdaterError.domain, code: UpdaterError.processTimeout.rawValue, userInfo: [NSLocalizedDescriptionKey: "\(description) timed out after \(Int(timeoutInterval))s"])
         }
     }
 
@@ -314,6 +414,7 @@ final class Updater: ObservableObject {
         }
         
         let destDir = appBundle.deletingLastPathComponent().path
+        let extractedApp = URL(fileURLWithPath: destDir).appendingPathComponent("quicktodo.app")
         
         // Extract using ditto (like vidp does)
         let process = Process()
@@ -323,8 +424,7 @@ final class Updater: ObservableObject {
         process.standardError = pipe
 
         do {
-            try process.run()
-            process.waitUntilExit()
+            try runProcessWithTimeout(process, description: "Extraction")
             guard process.terminationStatus == 0 else {
                 let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 cleanup(tempDir)
@@ -347,12 +447,63 @@ final class Updater: ObservableObject {
             return
         }
 
+        // Validate extracted bundle
+        guard let extractedBundle = Bundle(url: extractedApp),
+              extractedBundle.bundleIdentifier == Bundle.main.bundleIdentifier,
+              let executableURL = extractedBundle.executableURL,
+              FileManager.default.isExecutableFile(atPath: executableURL.path),
+              let extractedVersion = extractedBundle.infoDictionary?["CFBundleShortVersionString"] as? String,
+              extractedVersion == releaseVersion else {
+            cleanup(tempDir)
+            clearReleaseState()
+            DispatchQueue.main.async {
+                self.state = .error
+                self.errorMessage = "Downloaded app bundle is invalid or version mismatch."
+                self.resetAfterDelay()
+            }
+            return
+        }
+
+        // Verify code signature
+        let codesignProcess = Process()
+        codesignProcess.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        codesignProcess.arguments = ["--verify", "--strict", extractedApp.path]
+        let codesignPipe = Pipe()
+        codesignProcess.standardError = codesignPipe
+        do {
+            try runProcessWithTimeout(codesignProcess, description: "Code signature verification")
+            if codesignProcess.terminationStatus != 0 {
+                let output = String(data: codesignPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                cleanup(tempDir)
+                clearReleaseState()
+                DispatchQueue.main.async {
+                    self.state = .error
+                    self.errorMessage = "Code signature verification failed: \(output)"
+                    self.resetAfterDelay()
+                }
+                return
+            }
+        } catch {
+            cleanup(tempDir)
+            clearReleaseState()
+            DispatchQueue.main.async {
+                self.state = .error
+                self.errorMessage = "Code signature check failed: \(error.localizedDescription)"
+                self.resetAfterDelay()
+            }
+            return
+        }
+
         // Remove quarantine attribute
         let xattrProcess = Process()
         xattrProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-        xattrProcess.arguments = ["-dr", "com.apple.quarantine", appBundle.path]
-        try? xattrProcess.run()
-        xattrProcess.waitUntilExit()
+        xattrProcess.arguments = ["-dr", "com.apple.quarantine", extractedApp.path]
+        do {
+            try runProcessWithTimeout(xattrProcess, description: "Quarantine removal")
+        } catch {
+            // Log but don't fail - quarantine removal is best effort
+            print("Warning: Failed to remove quarantine attribute: \(error)")
+        }
 
         cleanup(tempDir)
 
@@ -365,9 +516,17 @@ final class Updater: ObservableObject {
             // Relaunch from the same bundle location (use .app directory, not executable)
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = [appBundle.path]
-            try? task.run()
-            NSApplication.shared.terminate(nil)
+            task.arguments = [extractedApp.path]
+            do {
+                try task.run()
+                // Give the new process time to start before terminating
+                Thread.sleep(forTimeInterval: 0.5)
+                NSApplication.shared.terminate(nil)
+            } catch {
+                self.state = .error
+                self.errorMessage = "Update installed but failed to relaunch: \(error.localizedDescription)"
+                self.resetAfterDelay()
+            }
         }
     }
 
@@ -375,13 +534,43 @@ final class Updater: ObservableObject {
         DispatchQueue.main.async {
             if manual {
                 self.state = .error
-                self.errorMessage = error.localizedDescription
+                self.errorMessage = self.friendlyErrorMessage(for: error)
                 self.resetAfterDelay()
             } else {
                 self.state = .idle
             }
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastUpdateCheck")
+            // Only update last check time on actual error (not cancelled)
+            if (error as NSError).code != NSURLErrorCancelled {
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastUpdateCheck")
+            }
         }
+    }
+
+    private func friendlyErrorMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost:
+                return "Cannot reach update server. Check your internet connection."
+            case NSURLErrorTimedOut:
+                return "Update check timed out. Try again."
+            case NSURLErrorNotConnectedToInternet:
+                return "No internet connection. Cannot check for updates."
+            case NSURLErrorNetworkConnectionLost:
+                return "Network connection lost. Try again."
+            case NSURLErrorCancelled:
+                return "Update check cancelled."
+            default:
+                return "Network error: \(error.localizedDescription)"
+            }
+        }
+        // Handle HTTP status codes
+        if nsError.domain == "" {
+            if nsError.code == 403 || nsError.code == 429 {
+                return "GitHub API rate limited. Please try again later."
+            }
+        }
+        return error.localizedDescription
     }
 
     private func resetAfterDelay() {
@@ -399,10 +588,21 @@ extension Updater.State {
         switch self {
         case .checking: return "Checking for updates…"
         case .available: return "Click to download and install v\(Updater.shared.releaseVersion ?? "")"
-        case .downloading: return "Downloading update…"
+        case .downloading: 
+            let progress = Int(Updater.shared.downloadProgress * 100)
+            return "Downloading update… \(progress)%"
         case .installing: return "Installing update…"
+        case .upToDate:
+            if let msg = Updater.shared.errorMessage, !msg.isEmpty {
+                return msg
+            }
+            return "You're on the latest version"
         case .error: return "Error: \(Updater.shared.errorMessage ?? "Unknown")"
-        case .idle: return "Check for updates"
+        case .idle: 
+            if let msg = Updater.shared.errorMessage, !msg.isEmpty {
+                return msg
+            }
+            return "Check for updates"
         }
     }
 }
