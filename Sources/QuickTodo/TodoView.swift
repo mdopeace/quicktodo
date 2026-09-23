@@ -104,11 +104,20 @@ struct TodoView: View {
                                         }
                                     },
                                     label: {
-                                        Text(
-                                            "Older than a week (\(store.olderCompletedItems.count))"
-                                        )
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.15)) {
+                                                olderExpanded.toggle()
+                                            }
+                                        } label: {
+                                            Text(
+                                                "Older than a week (\(store.olderCompletedItems.count))"
+                                            )
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 )
                                 .padding(.horizontal, 12)
