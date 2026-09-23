@@ -313,7 +313,7 @@ struct UpdateIndicator: View {
 
     var iconName: String {
         switch state {
-        case .checking, .idle, .error: "arrow.clockwise.circle"
+        case .checking, .idle, .error, .upToDate: "arrow.clockwise.circle"
         case .available, .downloading: "arrow.down.circle"
         case .installing: "gear.circle"
         }
@@ -335,6 +335,7 @@ struct UpdateIndicator: View {
         case .installing: "Installing update"
         case .error: "Update error - click to retry"
         case .idle: "Check for updates"
+        case .upToDate: "You're on the latest version"
         }
     }
 }
