@@ -18,9 +18,15 @@ struct TodoView: View {
     private var olderDone: Int {
         store.olderCompletedItems.count
     }
+    private var currentDone: Int {
+        totalDone - olderDone
+    }
+    private var currentTotal: Int {
+        store.items.count - olderDone
+    }
     private var progressValue: Double {
-        guard !store.items.isEmpty else { return 0 }
-        return Double(totalDone) / Double(store.items.count)
+        guard currentTotal > 0 else { return 0 }
+        return Double(currentDone) / Double(currentTotal)
     }
 
     var body: some View {
@@ -161,7 +167,7 @@ struct TodoView: View {
                             .fill(progressValue >= 1 ? .green : .blue)
                             .frame(width: 44 * CGFloat(progressValue), height: 6)
                     }
-                    Text("\(totalDone)/\(store.items.count) (\(olderDone))")
+                    Text("\(currentDone)/\(currentTotal) (\(olderDone))")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
