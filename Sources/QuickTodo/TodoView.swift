@@ -22,8 +22,9 @@ struct TodoView: View {
         store.olderCompletedItems.count
     }
     private var progressValue: Double {
-        guard currentTotal > 0 else { return 0 }
-        return Double(currentDone) / Double(currentTotal)
+        guard !store.items.isEmpty else { return 0 }
+        let done = Double(store.items.filter(\.isDone).count)
+        return done / Double(store.items.count)
     }
 
     var body: some View {

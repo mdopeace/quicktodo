@@ -9,7 +9,6 @@ final class Updater: ObservableObject {
 
     @Published private(set) var state: State = .idle
     @Published private(set) var releaseVersion: String?
-    @Published private(set) var releaseURL: URL?
     @Published private(set) var releaseChecksum: String?
     @Published private(set) var releaseAssetID: Int?
     @Published private(set) var errorMessage: String?
@@ -87,7 +86,6 @@ final class Updater: ObservableObject {
         let apiURL = URL(string: "https://api.github.com/repos/\(repo)/releases/assets/\(assetID)")!
         var request = URLRequest(url: apiURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
         let task = URLSession.shared.downloadTask(with: request) { [weak self] localURL, _, error in
             guard let self = self else { return }
@@ -120,7 +118,6 @@ final class Updater: ObservableObject {
 
     private func clearReleaseState() {
         releaseVersion = nil
-        releaseURL = nil
         releaseChecksum = nil
         releaseAssetID = nil
     }
@@ -221,7 +218,7 @@ final class Updater: ObservableObject {
             }
 
             guard let asset = release.assets.first(where: { $0.name == "quicktodo.app.zip" }),
-                  let downloadURL = URL(string: asset.browser_download_url) else {
+                  let _ = URL(string: asset.browser_download_url) else {
                 self.handleError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Release asset not found"]), manual: manual)
                 return
             }
@@ -246,7 +243,6 @@ final class Updater: ObservableObject {
                         } else {
                             self.state = .available
                             self.releaseVersion = String(latestVersion)
-                            self.releaseURL = downloadURL
                             self.releaseAssetID = asset.id
                             self.releaseChecksum = checksum
                             self.errorMessage = nil
@@ -256,45 +252,18 @@ final class Updater: ObservableObject {
                 return
             }
 
-            // No checksum asset
+// No checksum asset
             DispatchQueue.main.async {
                 self.state = .available
                 self.releaseVersion = String(latestVersion)
-                self.releaseURL = downloadURL
                 self.releaseAssetID = asset.id
                 self.releaseChecksum = nil
                 self.errorMessage = nil
-            }
+                        }
 
         } catch {
             handleError(error, manual: manual)
         }
-    }
-
-    private func downloadFile(from url: URL, to destination: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
-            guard let self = self else { return }
-            self.downloads.removeValue(forKey: url)
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            guard let localURL = localURL else {
-                completion(.failure(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "No local file"])))
-                return
-            }
-            do {
-                try FileManager.default.removeItem(at: destination)
-            } catch {}
-            do {
-                try FileManager.default.moveItem(at: localURL, to: destination)
-                completion(.success(()))
-            } catch {
-                completion(.failure(error))
-            }
-        }
-        task.resume()
-        downloads[url] = task
     }
 
     private func verifyAndInstall(zipURL: URL, tempDir: URL) {
@@ -390,7 +359,6 @@ final class Updater: ObservableObject {
         DispatchQueue.main.async {
             self.state = .idle
             self.releaseVersion = nil
-            self.releaseURL = nil
             self.releaseChecksum = nil
             self.releaseAssetID = nil
             // Relaunch from the same bundle location (use .app directory, not executable)
