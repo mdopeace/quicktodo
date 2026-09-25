@@ -404,19 +404,37 @@ final class Updater: ObservableObject {
     private func relaunch(from appURL: URL) {
         state = .idle
         clearReleaseState()
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = [appURL.path]
+
+        // Launch through a detached helper rather than calling `open` here:
+        // LaunchServices will not start a second copy of an app whose bundle id
+        // is already running, so opening now would only re-activate this
+        // process, which then exits and leaves nothing running. The helper waits
+        // for this process to actually be gone before opening, because an
+        // orderly shutdown is not instantaneous.
+        let command = AppRelaunch.command(
+            for: appURL,
+            exiting: ProcessInfo.processInfo.processIdentifier
+        )
+        let helper = Process()
+        helper.executableURL = URL(fileURLWithPath: command.executable)
+        helper.arguments = command.arguments
+        helper.standardInput = FileHandle.nullDevice
+        helper.standardOutput = FileHandle.nullDevice
+        helper.standardError = FileHandle.nullDevice
+
         do {
-            try task.run()
-            // Give the new process time to start before terminating
-            Thread.sleep(forTimeInterval: 0.5)
-            NSApplication.shared.terminate(nil)
+            try helper.run()
+            NSLog("QuickTodo: update installed, restarting via helper (pid %d)", ProcessInfo.processInfo.processIdentifier)
         } catch {
             state = .error
-            errorMessage = "Update installed but failed to relaunch: \(error.localizedDescription)"
+            errorMessage = "Update installed but could not restart: \(error.localizedDescription)"
             resetAfterDelay()
+            return
         }
+
+        // Let the helper be scheduled before this process goes away.
+        Thread.sleep(forTimeInterval: 0.2)
+        NSApplication.shared.terminate(nil)
     }
 
     private func handleError(_ error: Error, manual: Bool) {
