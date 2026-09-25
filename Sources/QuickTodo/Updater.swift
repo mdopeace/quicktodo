@@ -9,9 +9,6 @@ enum UpdaterError: Int, Error, CaseIterable {
     case checksumMissing = 1
     case checksumAssetMissing = 2
     case bundleValidationFailed = 3
-    case codeSignatureFailed = 4
-    case processTimeout = 5
-    case relaunchFailed = 6
 }
 
 final class Updater: ObservableObject {
@@ -35,7 +32,6 @@ final class Updater: ObservableObject {
     private var lastManualCheckTime: Date?
     private let manualCheckCooldown: TimeInterval = 10
     private let requestTimeout: TimeInterval = 30
-    private let processTimeout: TimeInterval = 60
     private var currentCheckTask: URLSessionDataTask?
     private var currentChecksumTask: URLSessionDataTask?
     private var isManualCheck = false
@@ -83,6 +79,7 @@ final class Updater: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         } catch {
+            clearReleaseState()
             DispatchQueue.main.async {
                 self.state = .error
                 self.errorMessage = "Could not prepare update: \(error.localizedDescription)"
@@ -343,8 +340,10 @@ final class Updater: ObservableObject {
     }
 
     private func verifyAndInstall(zipURL: URL, tempDir: URL) {
+        // Fail closed: without the expected digest there is nothing to verify
+        // against, so installing would mean trusting an unverified download.
         guard let expectedChecksum = releaseChecksum else {
-            install(zipURL: zipURL, tempDir: tempDir)
+            fail("The update is missing its checksum, so it was not installed.", tempDir: tempDir)
             return
         }
 
@@ -352,182 +351,71 @@ final class Updater: ObservableObject {
         do {
             let data = try Data(contentsOf: zipURL)
             let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-            if actual.caseInsensitiveCompare(expectedChecksum) == .orderedSame {
-                install(zipURL: zipURL, tempDir: tempDir)
-            } else {
-                cleanup(tempDir)
-                clearReleaseState()
-                DispatchQueue.main.async {
-                    self.state = .error
-                    self.errorMessage = "Checksum mismatch. Update may be corrupted."
-                    if self.isManualCheck { self.resetAfterDelay() }
-                }
+            guard actual.caseInsensitiveCompare(expectedChecksum) == .orderedSame else {
+                fail("Checksum mismatch. The update was not installed.", tempDir: tempDir)
+                return
             }
+            install(zipURL: zipURL, tempDir: tempDir)
         } catch {
-            cleanup(tempDir)
-            clearReleaseState()
-            DispatchQueue.main.async {
-                self.state = .error
-                self.errorMessage = "Checksum verification failed: \(error.localizedDescription)"
-                if self.isManualCheck { self.resetAfterDelay() }
-            }
-        }
-    }
-
-    // Helper to run Process with timeout
-    private func runProcessWithTimeout(_ process: Process, timeout: TimeInterval? = nil, description: String) throws {
-        let timeoutInterval = timeout ?? processTimeout
-        try process.run()
-        
-        let semaphore = DispatchSemaphore(value: 0)
-        var terminated = false
-        
-        DispatchQueue.global(qos: .utility).async {
-            process.waitUntilExit()
-            terminated = true
-            semaphore.signal()
-        }
-        
-        let result = semaphore.wait(timeout: .now() + timeoutInterval)
-        if result == .timedOut {
-            if !terminated {
-                process.terminate()
-                semaphore.wait() // Wait for termination to complete
-            }
-            throw NSError(domain: UpdaterError.domain, code: UpdaterError.processTimeout.rawValue, userInfo: [NSLocalizedDescriptionKey: "\(description) timed out after \(Int(timeoutInterval))s"])
+            fail("Checksum verification failed: \(error.localizedDescription)", tempDir: tempDir)
         }
     }
 
     private func install(zipURL: URL, tempDir: URL) {
         DispatchQueue.main.async { self.state = .installing }
 
-        // In-place update: extract to current app bundle's parent directory
+        guard let version = releaseVersion else {
+            fail("The update to install is no longer known. Check for updates again.", tempDir: tempDir)
+            return
+        }
         guard let appBundle = currentAppBundleURL else {
-            cleanup(tempDir)
-            clearReleaseState()
-            DispatchQueue.main.async {
-                self.state = .error
-                self.errorMessage = "Could not locate app bundle for update"
-                self.resetAfterDelay()
-            }
+            fail("Could not locate the running app to update.", tempDir: tempDir)
             return
         }
-        
-        let destDir = appBundle.deletingLastPathComponent().path
-        let extractedApp = URL(fileURLWithPath: destDir).appendingPathComponent("quicktodo.app")
-        
-        // Extract using ditto (like vidp does)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        process.arguments = ["-x", "-k", zipURL.path, destDir]
-        let pipe = Pipe()
-        process.standardError = pipe
 
+        // AppInstaller stages, validates, then swaps. The live bundle is only
+        // touched once the staged copy has passed every check.
         do {
-            try runProcessWithTimeout(process, description: "Extraction")
-            guard process.terminationStatus == 0 else {
-                let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                NSLog("QuickTodo: ditto failed: %@", output)
-                cleanup(tempDir)
-                clearReleaseState()
-                DispatchQueue.main.async {
-                    self.state = .error
-                    self.errorMessage = "The app archive could not be extracted."
-                    self.resetAfterDelay()
-                }
-                return
-            }
-        } catch {
+            let installed = try AppInstaller.install(
+                zipURL: zipURL,
+                replacing: appBundle,
+                expectedVersion: version
+            )
             cleanup(tempDir)
-            clearReleaseState()
-            DispatchQueue.main.async {
-                self.state = .error
-                self.errorMessage = "Extraction failed: \(error.localizedDescription)"
-                self.resetAfterDelay()
-            }
-            return
-        }
-
-        // Validate extracted bundle
-        guard let extractedBundle = Bundle(url: extractedApp),
-              extractedBundle.bundleIdentifier == Bundle.main.bundleIdentifier,
-              let executableURL = extractedBundle.executableURL,
-              FileManager.default.isExecutableFile(atPath: executableURL.path),
-              let extractedVersion = extractedBundle.infoDictionary?["CFBundleShortVersionString"] as? String,
-              extractedVersion == releaseVersion else {
-            cleanup(tempDir)
-            clearReleaseState()
-            DispatchQueue.main.async {
-                self.state = .error
-                self.errorMessage = "Downloaded app bundle is invalid or version mismatch."
-                self.resetAfterDelay()
-            }
-            return
-        }
-
-        // Verify code signature
-        let codesignProcess = Process()
-        codesignProcess.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-        codesignProcess.arguments = ["--verify", "--strict", extractedApp.path]
-        let codesignPipe = Pipe()
-        codesignProcess.standardError = codesignPipe
-        do {
-            try runProcessWithTimeout(codesignProcess, description: "Code signature verification")
-            if codesignProcess.terminationStatus != 0 {
-                let output = String(data: codesignPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                cleanup(tempDir)
-                clearReleaseState()
-                DispatchQueue.main.async {
-                    self.state = .error
-                    self.errorMessage = "Code signature verification failed: \(output)"
-                    self.resetAfterDelay()
-                }
-                return
-            }
+            DispatchQueue.main.async { self.relaunch(from: installed) }
+        } catch let error as InstallError {
+            fail(error.message, tempDir: tempDir)
         } catch {
-            cleanup(tempDir)
-            clearReleaseState()
-            DispatchQueue.main.async {
-                self.state = .error
-                self.errorMessage = "Code signature check failed: \(error.localizedDescription)"
-                self.resetAfterDelay()
-            }
-            return
+            fail("Update failed: \(error.localizedDescription)", tempDir: tempDir)
         }
+    }
 
-        // Remove quarantine attribute
-        let xattrProcess = Process()
-        xattrProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-        xattrProcess.arguments = ["-dr", "com.apple.quarantine", extractedApp.path]
-        do {
-            try runProcessWithTimeout(xattrProcess, description: "Quarantine removal")
-        } catch {
-            // Log but don't fail - quarantine removal is best effort
-            print("Warning: Failed to remove quarantine attribute: \(error)")
-        }
-
+    private func fail(_ message: String, tempDir: URL) {
         cleanup(tempDir)
-
+        clearReleaseState()
+        NSLog("QuickTodo: update failed: %@", message)
         DispatchQueue.main.async {
-            self.state = .idle
-            self.releaseVersion = nil
-            self.releaseURL = nil
-            self.releaseChecksum = nil
-            self.releaseAssetID = nil
-            // Relaunch from the same bundle location (use .app directory, not executable)
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = [extractedApp.path]
-            do {
-                try task.run()
-                // Give the new process time to start before terminating
-                Thread.sleep(forTimeInterval: 0.5)
-                NSApplication.shared.terminate(nil)
-            } catch {
-                self.state = .error
-                self.errorMessage = "Update installed but failed to relaunch: \(error.localizedDescription)"
-                self.resetAfterDelay()
-            }
+            self.state = .error
+            self.errorMessage = message
+            self.resetAfterDelay()
+        }
+    }
+
+    private func relaunch(from appURL: URL) {
+        state = .idle
+        clearReleaseState()
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = [appURL.path]
+        do {
+            try task.run()
+            // Give the new process time to start before terminating
+            Thread.sleep(forTimeInterval: 0.5)
+            NSApplication.shared.terminate(nil)
+        } catch {
+            state = .error
+            errorMessage = "Update installed but failed to relaunch: \(error.localizedDescription)"
+            resetAfterDelay()
         }
     }
 
