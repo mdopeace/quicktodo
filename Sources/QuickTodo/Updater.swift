@@ -399,7 +399,7 @@ final class Updater: ObservableObject {
     private func fail(_ message: String, tempDir: URL) {
         cleanup(tempDir)
         clearReleaseState()
-        Self.log.error("update failed: \(message, privacy: .public)")
+        Self.log.error("\(AppRelaunch.logTag): update failed: \(message, privacy: .public)")
         DispatchQueue.main.async {
             self.state = .error
             self.errorMessage = message
@@ -428,11 +428,15 @@ final class Updater: ObservableObject {
         helper.standardOutput = FileHandle.nullDevice
         helper.standardError = FileHandle.nullDevice
 
+        // The pid is this app's own, and it is the one the helper waits on, so
+        // label it as such — logging it as the helper's would send a debugger
+        // looking for a process that has already exited.
+        let pid = ProcessInfo.processInfo.processIdentifier
         do {
             try helper.run()
             Self.log.notice("""
-                update installed; restarting via detached helper \
-                (pid \(ProcessInfo.processInfo.processIdentifier, privacy: .public))
+                \(AppRelaunch.logTag): update installed, helper will reopen once \
+                pid \(pid, privacy: .public) exits
                 """)
         } catch {
             state = .error

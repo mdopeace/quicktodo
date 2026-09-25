@@ -11,8 +11,10 @@ public enum AppRelaunch {
     /// run-loop teardown), and opening before it finishes is deduplicated away.
     public static let maxWait: TimeInterval = 6
 
-    /// Distinguishes this app's relaunch lines in the unified log.
-    public static let logTag = "QuickTodo.relaunch"
+    /// Shared marker on every relaunch diagnostic. The app-side lines carry it
+    /// in the message and the helper-side line as its `logger` tag, so one
+    /// `eventMessage CONTAINS` query returns both halves of the story.
+    public static let logTag = "QuickTodo.updater"
 
     /// The command that launches `appURL` once `pid` has exited.
     ///
@@ -28,14 +30,17 @@ public enum AppRelaunch {
     /// how long shutdown takes.
     ///
     /// Once the app has exited the parent can no longer observe anything, so
-    /// the helper reports `open`'s exit status to the unified log itself.
+    /// the helper reports `open`'s exit status to the unified log itself. It
+    /// must be the statement immediately after `open` — anything in between
+    /// would clobber the status being reported.
     ///
-    /// - Parameter openTool: the `open` binary to invoke. Injectable only so
-    ///   tests can observe how the helper is called.
+    /// - Parameters openTool: the `open` binary. logTool: the `logger` binary.
+    ///   Both injectable only so tests can observe how the helper is called.
     public static func command(
         for appURL: URL,
         exiting pid: pid_t,
-        open openTool: String = "/usr/bin/open"
+        open openTool: String = "/usr/bin/open",
+        log logTool: String = "/usr/bin/logger"
     ) -> (executable: String, arguments: [String]) {
         let attempts = Int(maxWait / pollInterval)
         // Absolute tool paths so this does not depend on the caller's PATH, and
@@ -43,7 +48,7 @@ public enum AppRelaunch {
         let script = "i=0; while /bin/kill -0 \"$1\" 2>/dev/null && [ \"$i\" -lt \(attempts) ]; "
             + "do /bin/sleep \(pollInterval); i=$((i + 1)); done; "
             + "\(openTool) \"$0\"; "
-            + "/usr/bin/logger -t \(logTag) \"\(logTag): open exited with status $?\""
+            + "\(logTool) -t \(logTag) \"\(logTag): open exited with status $?\""
         return ("/bin/sh", ["-c", script, appURL.path, String(pid)])
     }
 }
