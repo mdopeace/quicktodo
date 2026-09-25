@@ -87,12 +87,13 @@ public final class TodoStore: ObservableObject {
     /// say which to keep.
     static func adoptSandboxedStore(into fileURL: URL, container: URL? = nil) {
         let fm = FileManager.default
-        guard !fm.fileExists(atPath: fileURL.path) else { return }
-        // "quicktodo" here must keep matching CFBundleIdentifier in Info.plist —
-        // the container is named after the bundle id, and a silent mismatch means
-        // a silent migration failure.
+        // Deliberately hardcoded to the bundle id the *sandboxed* releases shipped
+        // with, not Bundle.main.bundleIdentifier. If the id is ever renamed this
+        // must keep pointing at the old container, or existing todos are stranded
+        // in a path nothing reads. Do not "fix" this to track Info.plist.
         let legacy = container ?? URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Containers/com.mdopeace.quicktodo/Data/Library/Application Support/QuickTodo/todos.json")
+        guard !fm.fileExists(atPath: fileURL.path) else { return }
         guard fm.fileExists(atPath: legacy.path) else { return } // fresh install, nothing to migrate
         guard let data = try? Data(contentsOf: legacy),
               (try? data.write(to: fileURL, options: .atomic)) != nil else {
