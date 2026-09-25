@@ -332,9 +332,9 @@ struct UpdateIndicator: View {
 
     var iconName: String {
         switch state {
-        case .checking, .idle, .error, .upToDate: "arrow.clockwise.circle"
-        case .available, .downloading: "arrow.down.circle"
-        case .installing: "gear.circle"
+        case .checking, .idle, .error, .upToDate: "arrow.clockwise"
+        case .available, .downloading: "arrow.down"
+        case .installing: "gear"
         }
     }
 
