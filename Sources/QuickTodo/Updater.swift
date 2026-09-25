@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AppKit
 import CryptoKit
+import os
 import QuickTodoCore
 
 enum UpdaterError: Int, Error, CaseIterable {
@@ -13,6 +14,11 @@ enum UpdaterError: Int, Error, CaseIterable {
 
 final class Updater: ObservableObject {
     static let shared = Updater()
+
+    /// `NSLog` from a LaunchServices-started agent does not surface in the
+    /// unified log, so update failures were effectively invisible. Visible by
+    /// default: `log show --predicate 'eventMessage CONTAINS "QuickTodo.updater"'`.
+    private static let log = Logger(subsystem: "com.mdopeace.quicktodo", category: "updater")
 
     @Published private(set) var state: State = .idle
     @Published private(set) var releaseVersion: String?
@@ -393,7 +399,7 @@ final class Updater: ObservableObject {
     private func fail(_ message: String, tempDir: URL) {
         cleanup(tempDir)
         clearReleaseState()
-        NSLog("QuickTodo: update failed: %@", message)
+        Self.log.error("\(AppRelaunch.logTag): update failed: \(message, privacy: .public)")
         DispatchQueue.main.async {
             self.state = .error
             self.errorMessage = message
@@ -422,9 +428,16 @@ final class Updater: ObservableObject {
         helper.standardOutput = FileHandle.nullDevice
         helper.standardError = FileHandle.nullDevice
 
+        // The pid is this app's own, and it is the one the helper waits on, so
+        // label it as such — logging it as the helper's would send a debugger
+        // looking for a process that has already exited.
+        let pid = ProcessInfo.processInfo.processIdentifier
         do {
             try helper.run()
-            NSLog("QuickTodo: update installed, restarting via helper (pid %d)", ProcessInfo.processInfo.processIdentifier)
+            Self.log.notice("""
+                \(AppRelaunch.logTag): update installed, helper will reopen once \
+                pid \(pid, privacy: .public) exits
+                """)
         } catch {
             state = .error
             errorMessage = "Update installed but could not restart: \(error.localizedDescription)"

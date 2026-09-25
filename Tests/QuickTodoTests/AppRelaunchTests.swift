@@ -31,7 +31,8 @@ final class AppRelaunchTests: XCTestCase {
         try run(AppRelaunch.command(
             for: URL(fileURLWithPath: app),
             exiting: try exitedPID(),
-            open: try makeOpenStub()
+            open: try makeOpenStub(),
+            log: try makeSilentLoggerStub()
         ))
         let elapsed = Date().timeIntervalSince(start)
 
@@ -60,7 +61,8 @@ final class AppRelaunchTests: XCTestCase {
         try run(AppRelaunch.command(
             for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
             exiting: child.processIdentifier,
-            open: try makeOpenStub()
+            open: try makeOpenStub(),
+            log: try makeSilentLoggerStub()
         ))
         child.waitUntilExit()
 
@@ -109,6 +111,36 @@ final class AppRelaunchTests: XCTestCase {
         )
     }
 
+    /// Once the app has exited nobody can observe whether the relaunch worked, so
+    /// the helper has to say so itself. Asserted by running it, because a
+    /// substring check cannot tell `open "$0"; logger ... $?` from a version with
+    /// something in between that clobbers the status — which would leave the
+    /// helper cheerfully reporting success while the relaunch silently failed.
+    func test_helper_reports_the_real_open_exit_status() throws {
+        try run(AppRelaunch.command(
+            for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
+            exiting: try exitedPID(),
+            open: try makeStub(named: "open", exitCode: 3),
+            log: try makeStub(named: "logger", exitCode: 0, recordsTo: "")
+        ))
+
+        XCTAssertEqual(
+            try String(contentsOf: try makeLog(), encoding: .utf8),
+            "-t \(AppRelaunch.logTag) \(AppRelaunch.logTag): open exited with status 3\n",
+            "the reported status must be open's, not a later command's"
+        )
+    }
+
+    func test_relaunch_diagnostics_share_one_greppable_marker() throws {
+        // The app-side lines carry this marker in the message and the helper
+        // side as its logger tag, so one query returns both.
+        let script = try script()
+        XCTAssertTrue(
+            script.contains("\(AppRelaunch.logTag): open exited with status"),
+            "helper message must carry the shared marker: \(script)"
+        )
+    }
+
     // MARK: - Helpers
 
     private func script() throws -> String {
@@ -124,8 +156,33 @@ final class AppRelaunchTests: XCTestCase {
 
     /// A stand-in for `open` that records how it was called.
     private func makeOpenStub() throws -> String {
-        let stub = root.appendingPathComponent("open")
-        try "#!/bin/sh\nprintf 'open %s\\n' \"$1\" >> \(try makeLog().path)\n"
+        try makeStub(named: "open", exitCode: 0, recordsTo: "open")
+    }
+
+    /// Keeps the suite out of the developer's unified log — these tests would
+    /// otherwise write the very lines someone greps for when diagnosing a real
+    /// failed update.
+    private func makeSilentLoggerStub() throws -> String {
+        try makeStub(named: "silent-logger", exitCode: 0)
+    }
+
+    /// A stand-in for one of the helper's tools.
+    ///
+    /// - Parameters exitCode: what the stub returns, standing in for the real
+    ///   tool's result. recordsTo: when set, appends the stub's arguments to
+    ///   the call log behind this label; when nil, records nothing.
+    private func makeStub(
+        named name: String,
+        exitCode: Int32,
+        recordsTo label: String? = nil
+    ) throws -> String {
+        let stub = root.appendingPathComponent(name)
+        var body = ""
+        if let label {
+            let logged = label.isEmpty ? "\"$*\"" : "\"\(label) $*\""
+            body = "printf '%s\\n' \(logged) >> \(try makeLog().path)\n"
+        }
+        try ("#!/bin/sh\n" + body + "exit \(exitCode)\n")
             .write(to: stub, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
         return stub.path
