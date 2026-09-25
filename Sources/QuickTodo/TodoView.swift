@@ -9,12 +9,24 @@ struct TodoView: View {
     @State private var draft = ""
     @State private var scrollTopTick = 0
     @State private var expandedItems: Set<UUID> = []
+    @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
+    private var totalDone: Int {
+        store.items.filter(\.isDone).count
+    }
+    private var olderDone: Int {
+        store.olderCompletedItems.count
+    }
+    private var currentDone: Int {
+        totalDone - olderDone
+    }
+    private var currentTotal: Int {
+        store.items.count - olderDone
+    }
     private var progressValue: Double {
-        guard !store.items.isEmpty else { return 0 }
-        let done = Double(store.items.filter(\.isDone).count)
-        return done / Double(store.items.count)
+        guard currentTotal > 0 else { return 0 }
+        return Double(currentDone) / Double(currentTotal)
     }
 
     var body: some View {
@@ -88,11 +100,39 @@ struct TodoView: View {
                                     row(item)
                                 }
                             }
-                            if !store.completedItems.isEmpty {
+                            if !store.recentCompletedItems.isEmpty {
                                 sectionHeader("Completed")
-                                ForEach(store.completedItems) { item in
+                                ForEach(store.recentCompletedItems) { item in
                                     row(item)
                                 }
+                            }
+                            if !store.olderCompletedItems.isEmpty {
+                                DisclosureGroup(
+                                    isExpanded: $olderExpanded,
+                                    content: {
+                                        ForEach(store.olderCompletedItems) { item in
+                                            row(item)
+                                        }
+                                    },
+                                    label: {
+                                        Button {
+                                            withAnimation(rowAnimation) {
+                                                olderExpanded.toggle()
+                                            }
+                                        } label: {
+                                            Text(
+                                                "Older than a week (\(store.olderCompletedItems.count))"
+                                            )
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                )
+                                .padding(.horizontal, 12)
+                                .padding(.top, 8)
                             }
                         }
                     }
@@ -127,7 +167,7 @@ struct TodoView: View {
                             .fill(progressValue >= 1 ? .green : .blue)
                             .frame(width: 44 * CGFloat(progressValue), height: 6)
                     }
-                    Text("\(store.items.filter(\.isDone).count)/\(store.items.count)")
+                    Text("\(currentDone)/\(currentTotal) (\(olderDone))")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                 }
@@ -210,7 +250,9 @@ struct TodoView: View {
                 }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(expandedItems.contains(item.id) ? "Collapse" : "Expand")
-                .accessibilityHint("Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item")
+                .accessibilityHint(
+                    "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
+                )
             Spacer(minLength: 8)
             Button {
                 withAnimation(rowAnimation) {
