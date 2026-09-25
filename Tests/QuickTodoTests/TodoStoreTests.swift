@@ -20,6 +20,7 @@ final class TodoStoreTests: XCTestCase {
         let reloaded = TodoStore(fileURL: url)
         XCTAssertEqual(reloaded.items.count, 1)
         XCTAssertTrue(reloaded.items[0].isDone)
+        XCTAssertEqual(reloaded.items[0].updatedAt, store.items[0].updatedAt)
 
         store.delete(store.items[0].id)
         XCTAssertTrue(store.items.isEmpty)
@@ -34,7 +35,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.activeByDay.flatMap { $0.items }.map(\.title), ["B", "A"])
     }
 
-    func test_done_sinks_to_bottom() throws {
+    func test_done_leaves_active_list() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
@@ -42,20 +43,21 @@ final class TodoStoreTests: XCTestCase {
         store.add("B")
         store.toggle(store.items[1].id)
         XCTAssertEqual(store.activeByDay.flatMap { $0.items }.map(\.title), ["A"])
-        XCTAssertEqual(store.completedItems.map(\.title), ["B"])
+        XCTAssertEqual(store.recentCompletedItems.map(\.title), ["B"])
     }
 
-    func test_done_oldest_first_at_bottom() throws {
+    func test_done_newest_first_at_top() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
+        let base = Date()
         store.add("A")
         store.add("B")
         store.add("C")
-        store.toggle(store.items[1].id) // B done
-        store.toggle(store.items[2].id) // C done
+        store.toggle(store.items[1].id, updatedAt: base)
+        store.toggle(store.items[2].id, updatedAt: base.addingTimeInterval(60))
         XCTAssertEqual(store.activeByDay.flatMap { $0.items }.map(\.title), ["A"])
-        XCTAssertEqual(store.completedItems.map(\.title), ["B", "C"])
+        XCTAssertEqual(store.recentCompletedItems.map(\.title), ["C", "B"])
     }
 
     func test_blank_title_ignored() throws {
@@ -90,7 +92,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.items.map(\.title), ["Fresh start"])
     }
 
-    func test_add_sets_createdAt() throws {
+    func test_add_sets_timestamps() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
@@ -99,6 +101,8 @@ final class TodoStoreTests: XCTestCase {
         let after = Date()
         XCTAssertGreaterThanOrEqual(store.items[0].createdAt, before)
         XCTAssertLessThanOrEqual(store.items[0].createdAt, after)
+        XCTAssertGreaterThanOrEqual(store.items[0].updatedAt, before)
+        XCTAssertLessThanOrEqual(store.items[0].updatedAt, after)
     }
 
     func test_legacy_json_without_createdAt_backfills_to_today() throws {
@@ -113,36 +117,63 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(TodoStore.dayLabel(for: store.activeByDay[0].day), "Today")
     }
 
+    func test_legacy_json_without_updatedAt_backfills_from_createdAt() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        // 721692800 is the JSONDecoder reference-date encoding of 2023-11-14.
+        try #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":true,"createdAt":721692800}]"#
+            .write(to: url, atomically: true, encoding: .utf8)
+        let store = TodoStore(fileURL: url)
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items[0].updatedAt, store.items[0].createdAt)
+        XCTAssertFalse(Calendar.current.isDateInToday(store.items[0].updatedAt))
+        XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Legacy"])
+    }
+
     func test_active_grouped_by_day_newest_day_first() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
         let cal = Calendar.current
-        let today = Date()
+        // Noon keeps the +60s item safely inside today, so the intra-day
+        // ordering assertion can't drift across midnight.
+        let today = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        let todayLater = today.addingTimeInterval(60)
         let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
         let older = cal.date(byAdding: .day, value: -5, to: today)!
-        store.add("Today A", createdAt: today)
-        store.add("Old", createdAt: older)
-        store.add("Yesterday", createdAt: yesterday)
-        store.add("Today B", createdAt: today)
+        store.add("Today A", updatedAt: today)
+        store.add("Old", updatedAt: older)
+        store.add("Yesterday", updatedAt: yesterday)
+        store.add("Today B", updatedAt: todayLater)
         let groups = store.activeByDay
         XCTAssertEqual(groups.count, 3)
         XCTAssertEqual(groups.map { TodoStore.dayLabel(for: $0.day) }[0], "Today")
         XCTAssertEqual(groups.map { TodoStore.dayLabel(for: $0.day) }[1], "Yesterday")
-        // Newest-first within a day
+        // Newest updatedAt first within a day
         XCTAssertEqual(groups[0].items.map(\.title), ["Today B", "Today A"])
     }
 
-    func test_completed_collapsed_oldest_first() throws {
+    func test_active_ties_break_to_newest_inserted() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
+        let day = Calendar.current.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        store.add("A", createdAt: day)
+        store.add("B", createdAt: day)
+        XCTAssertEqual(store.activeByDay.flatMap { $0.items }.map(\.title), ["B", "A"])
+    }
+
+    func test_completed_sorted_newest_updated_first() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        let base = Date()
         store.add("A")
         store.add("B")
         store.add("C")
-        store.toggle(store.items[1].id) // B done
-        store.toggle(store.items[2].id) // C done
-        XCTAssertEqual(store.completedItems.map(\.title), ["B", "C"])
+        store.toggle(store.items[1].id, updatedAt: base)
+        store.toggle(store.items[2].id, updatedAt: base.addingTimeInterval(60))
+        XCTAssertEqual(store.recentCompletedItems.map(\.title), ["C", "B"])
         XCTAssertTrue(store.activeByDay.flatMap { $0.items }.map(\.title) == ["A"])
     }
 
@@ -153,12 +184,46 @@ final class TodoStoreTests: XCTestCase {
         let cal = Calendar.current
         let now = Date()
         let old = cal.date(byAdding: .day, value: -8, to: now)!
-        store.add("Recent", createdAt: now)
-        store.add("Old", createdAt: old)
-        store.toggle(store.items[0].id)
-        store.toggle(store.items[1].id)
+        store.add("Recent", updatedAt: now)
+        store.add("Old", updatedAt: now)
+        store.toggle(store.items[0].id, updatedAt: now)
+        store.toggle(store.items[1].id, updatedAt: old)
         XCTAssertEqual(store.recentCompletedItems.map(\.title), ["Recent"])
         XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Old"])
+    }
+
+    func test_toggle_bumps_updatedAt_in_both_directions() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("T", updatedAt: Date(timeIntervalSince1970: 0))
+        let id = store.items[0].id
+        XCTAssertFalse(store.items[0].isDone)
+
+        store.toggle(id, updatedAt: Date(timeIntervalSince1970: 100))
+        XCTAssertTrue(store.items[0].isDone)
+        XCTAssertEqual(store.items[0].updatedAt, Date(timeIntervalSince1970: 100))
+
+        store.toggle(id, updatedAt: Date(timeIntervalSince1970: 200))
+        XCTAssertFalse(store.items[0].isDone)
+        XCTAssertEqual(store.items[0].updatedAt, Date(timeIntervalSince1970: 200))
+    }
+
+    func test_untoggle_returns_item_to_todays_active_list() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        let old = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        store.add("Resurrected", updatedAt: old)
+        store.toggle(store.items[0].id, updatedAt: old)
+        XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Resurrected"])
+        XCTAssertTrue(store.activeByDay.isEmpty)
+
+        store.toggle(store.items[0].id)
+        XCTAssertFalse(store.items[0].isDone)
+        XCTAssertEqual(store.activeByDay.count, 1)
+        XCTAssertEqual(TodoStore.dayLabel(for: store.activeByDay[0].day), "Today")
+        XCTAssertTrue(store.olderCompletedItems.isEmpty)
     }
 
     func test_dayLabel_formats_older_dates() throws {

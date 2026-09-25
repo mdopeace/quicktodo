@@ -121,7 +121,7 @@ struct TodoView: View {
                                             }
                                         } label: {
                                             Text(
-                                                "Older than a week (\(store.olderCompletedItems.count))"
+                                                "Completed over a week ago (\(store.olderCompletedItems.count))"
                                             )
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -223,7 +223,7 @@ struct TodoView: View {
     }
 
     private func row(_ item: TodoItem) -> some View {
-        HStack(spacing: 8) {
+        let content = HStack(spacing: 8) {
             Button {
                 withAnimation(rowAnimation) {
                     store.toggle(item.id)
@@ -266,6 +266,16 @@ struct TodoView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+
+        // Only done rows get a createdAt tooltip; an empty help would still be
+        // read out and inherit onto the row's child buttons.
+        return Group {
+            if item.isDone {
+                content.help("Created: \(TodoStore.dayLabel(for: item.createdAt))")
+            } else {
+                content
+            }
+        }
     }
 }
 
