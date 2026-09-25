@@ -57,7 +57,8 @@ open dist/quicktodo.app
 - Global hotkey (⌘⌥T) to open menu
 - Launch at login support
 - Auto-updates via GitHub API (automatic check on launch/menu-open; when update available, footer shows ⬇️ to download & install in-place)
-- Ad-hoc signed, sandboxed
+- Ad-hoc signed, not sandboxed (the in-app updater replaces the bundle in
+  `/Applications`, which App Sandbox forbids)
 
 ## Notes
 

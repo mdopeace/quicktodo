@@ -54,7 +54,6 @@ plutil -replace CFBundleVersion -string "$BUILD" "$CONTENTS/Info.plist"
 
 codesign --force --deep --options runtime \
     --sign "$SIGNING_IDENTITY" \
-    --entitlements QuickTodo.entitlements \
     "$APP"
 codesign --verify --deep --strict "$APP"
 

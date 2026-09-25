@@ -76,8 +76,30 @@ public final class TodoStore: ObservableObject {
                 .appendingPathComponent("QuickTodo", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             self.fileURL = dir.appendingPathComponent("todos.json")
+            Self.adoptSandboxedStore(into: self.fileURL)
         }
         load()
+    }
+
+    /// Sandboxed releases kept todos in the App Sandbox container. Unsandboxed we
+    /// read ~/Library/Application Support, so seed it from the container once.
+    /// Never overwrites: if both exist they have diverged and only the user can
+    /// say which to keep.
+    static func adoptSandboxedStore(into fileURL: URL, container: URL? = nil) {
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: fileURL.path) else { return }
+        // "quicktodo" here must keep matching CFBundleIdentifier in Info.plist —
+        // the container is named after the bundle id, and a silent mismatch means
+        // a silent migration failure.
+        let legacy = container ?? URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Containers/com.mdopeace.quicktodo/Data/Library/Application Support/QuickTodo/todos.json")
+        guard fm.fileExists(atPath: legacy.path) else { return } // fresh install, nothing to migrate
+        guard let data = try? Data(contentsOf: legacy),
+              (try? data.write(to: fileURL, options: .atomic)) != nil else {
+            NSLog("QuickTodo: sandboxed store %@ found but unreadable — todos not migrated", legacy.path)
+            return
+        }
+        NSLog("QuickTodo: seeded store from sandbox container %@", legacy.path)
     }
 
     public func add(_ title: String, createdAt: Date = Date(), updatedAt: Date? = nil) {

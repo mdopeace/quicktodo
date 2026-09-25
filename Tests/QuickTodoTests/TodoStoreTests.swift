@@ -92,6 +92,30 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.items.map(\.title), ["Fresh start"])
     }
 
+    func test_adopts_sandboxed_store_only_when_missing() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let live = tmp.appendingPathComponent("todos.json")
+        let legacy = tmp.appendingPathComponent("sandboxed.json")
+        try "from-container".write(to: legacy, atomically: true, encoding: .utf8)
+
+        // No local file yet (sandboxed-only install) → seed from the container.
+        TodoStore.adoptSandboxedStore(into: live, container: legacy)
+        XCTAssertEqual(try String(contentsOf: live, encoding: .utf8), "from-container")
+
+        // Both exist and diverged → never overwrite, the user decides.
+        try "from-app-support".write(to: live, atomically: true, encoding: .utf8)
+        TodoStore.adoptSandboxedStore(into: live, container: legacy)
+        XCTAssertEqual(try String(contentsOf: live, encoding: .utf8), "from-app-support")
+
+        // Fresh install: no container at all → create nothing, don't fail.
+        let fresh = tmp.appendingPathComponent("fresh.json")
+        TodoStore.adoptSandboxedStore(into: fresh, container: tmp.appendingPathComponent("nope.json"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fresh.path))
+    }
+
     func test_add_sets_timestamps() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
