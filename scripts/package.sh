@@ -8,8 +8,23 @@ cd "$(dirname "$0")/.." # repo root, so rm -rf below can't hit the wrong dir
 MODE=${1:-local}
 APP=dist/quicktodo.app
 CONTENTS="$APP/Contents"
-VERSION=${MARKETING_VERSION:-1.0}
-BUILD=${CURRENT_PROJECT_VERSION:-1}
+
+# Version.swift is the single source of truth: it is compiled into the binary as
+# `appVersion`, and the updater compares that against the release tag. Stamping
+# the bundle from the same value keeps plist and binary from ever disagreeing --
+# a mismatch there is what the in-app updater rejects as an invalid bundle.
+SOURCE_VERSION=$(sed -n 's/^public let appVersion = "\(.*\)"$/\1/p' Sources/QuickTodoCore/Version.swift)
+[ -n "$SOURCE_VERSION" ] || { echo "ERROR: could not read appVersion from Version.swift" >&2; exit 2; }
+
+PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
+if [ "$PLIST_VERSION" != "$SOURCE_VERSION" ]; then
+    echo "ERROR: Info.plist says $PLIST_VERSION but Version.swift says $SOURCE_VERSION." >&2
+    echo "       Bump both (see scripts/release.sh) or the updater will reject the build." >&2
+    exit 2
+fi
+
+VERSION=${MARKETING_VERSION:-$SOURCE_VERSION}
+BUILD=${CURRENT_PROJECT_VERSION:-$VERSION}
 
 case "$MODE" in
     local)
