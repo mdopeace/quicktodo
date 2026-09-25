@@ -427,11 +427,12 @@ final class Updater: ObservableObject {
             try runProcessWithTimeout(process, description: "Extraction")
             guard process.terminationStatus == 0 else {
                 let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                NSLog("QuickTodo: ditto failed: %@", output)
                 cleanup(tempDir)
                 clearReleaseState()
                 DispatchQueue.main.async {
                     self.state = .error
-                    self.errorMessage = output.isEmpty ? "The app archive could not be extracted." : output
+                    self.errorMessage = "The app archive could not be extracted."
                     self.resetAfterDelay()
                 }
                 return
