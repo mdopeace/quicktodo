@@ -109,6 +109,28 @@ final class AppRelaunchTests: XCTestCase {
         )
     }
 
+    /// Once the app has exited nobody can observe whether the relaunch worked, so
+    /// the helper has to say so itself. Without this, a helper that runs and then
+    /// fails to open leaves no trace at all.
+    func test_helper_reports_open_exit_status_to_the_unified_log() throws {
+        let script = try script()
+        XCTAssertTrue(
+            script.contains("/usr/bin/logger"),
+            "helper must report the outcome: \(script)"
+        )
+        let open = try XCTUnwrap(script.range(of: "open \"$0\""))
+        let log = try XCTUnwrap(script.range(of: "/usr/bin/logger"))
+        XCTAssertLessThan(open.lowerBound, log.lowerBound, "must log after opening, not before")
+        XCTAssertTrue(
+            script.contains("status $?"),
+            "must capture open's exit status: \(script)"
+        )
+        XCTAssertFalse(
+            script.contains("exec "),
+            "exec would replace the shell and skip the report: \(script)"
+        )
+    }
+
     // MARK: - Helpers
 
     private func script() throws -> String {

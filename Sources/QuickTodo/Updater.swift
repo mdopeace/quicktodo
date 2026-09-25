@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AppKit
 import CryptoKit
+import os
 import QuickTodoCore
 
 enum UpdaterError: Int, Error, CaseIterable {
@@ -13,6 +14,11 @@ enum UpdaterError: Int, Error, CaseIterable {
 
 final class Updater: ObservableObject {
     static let shared = Updater()
+
+    /// `NSLog` from a LaunchServices-started agent does not surface in the
+    /// unified log, so update failures were effectively invisible. Visible by
+    /// default: `log show --predicate 'eventMessage CONTAINS "QuickTodo.updater"'`.
+    private static let log = Logger(subsystem: "com.mdopeace.quicktodo", category: "updater")
 
     @Published private(set) var state: State = .idle
     @Published private(set) var releaseVersion: String?
@@ -393,7 +399,7 @@ final class Updater: ObservableObject {
     private func fail(_ message: String, tempDir: URL) {
         cleanup(tempDir)
         clearReleaseState()
-        NSLog("QuickTodo: update failed: %@", message)
+        Self.log.error("update failed: \(message, privacy: .public)")
         DispatchQueue.main.async {
             self.state = .error
             self.errorMessage = message
@@ -424,7 +430,10 @@ final class Updater: ObservableObject {
 
         do {
             try helper.run()
-            NSLog("QuickTodo: update installed, restarting via helper (pid %d)", ProcessInfo.processInfo.processIdentifier)
+            Self.log.notice("""
+                update installed; restarting via detached helper \
+                (pid \(ProcessInfo.processInfo.processIdentifier, privacy: .public))
+                """)
         } catch {
             state = .error
             errorMessage = "Update installed but could not restart: \(error.localizedDescription)"
