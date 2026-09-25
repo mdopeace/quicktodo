@@ -6,9 +6,10 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     public var title: String
     public var isDone = false
     public var createdAt = Date()
+    public var updatedAt = Date()
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, createdAt
+        case id, title, isDone, createdAt, updatedAt
     }
 }
 
@@ -19,34 +20,38 @@ public extension TodoItem {
         title = try c.decode(String.self, forKey: .title)
         isDone = try c.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        // Pre-updatedAt items inherit createdAt so they keep the bucket they
+        // already sit in; defaulting to now would reset everyone's history.
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
     }
 }
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
-    /// Active grouped by day, newest day first; newest-first within a day.
+    /// Active grouped by day, newest day first; newest updatedAt first within a day,
+    /// ties broken by newest inserted.
     public var activeByDay: [(day: Date, items: [TodoItem])] {
         let cal = Calendar.current
         var buckets: [Date: [TodoItem]] = [:]
-        for item in items.reversed() where !item.isDone {
-            let day = cal.startOfDay(for: item.createdAt)
+        // Array.sorted isn't stable, so carry insertion order as a tiebreaker;
+        // without it equal updatedAt values would fall back to oldest-inserted.
+        let byRecency = items.enumerated()
+            .sorted { ($0.element.updatedAt, $0.offset) > ($1.element.updatedAt, $1.offset) }
+        for item in byRecency.map(\.element) where !item.isDone {
+            let day = cal.startOfDay(for: item.updatedAt)
             buckets[day, default: []].append(item)
         }
         return buckets.keys.sorted(by: >).map { (day: $0, items: buckets[$0]!) }
     }
-    /// All done, oldest-first at the bottom.
-    public var completedItems: [TodoItem] {
-        items.filter { $0.isDone }
-    }
-    /// Done within the last 7 days (by createdAt). Oldest-first.
+    /// Done within the last 7 days (by updatedAt). Newest-first.
     public var recentCompletedItems: [TodoItem] {
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else { return [] }
-        return items.filter { $0.isDone && $0.createdAt >= cutoff }
+        return items.filter { $0.isDone && $0.updatedAt >= cutoff }.sorted { $0.updatedAt > $1.updatedAt }
     }
-    /// Done with createdAt older than 7 days. Oldest-first, shown collapsed.
+    /// Done with updatedAt older than 7 days. Newest-first, shown collapsed.
     public var olderCompletedItems: [TodoItem] {
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else { return [] }
-        return items.filter { $0.isDone && $0.createdAt < cutoff }
+        return items.filter { $0.isDone && $0.updatedAt < cutoff }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     public static func dayLabel(for date: Date, calendar: Calendar = .current) -> String {
@@ -75,16 +80,19 @@ public final class TodoStore: ObservableObject {
         load()
     }
 
-    public func add(_ title: String, createdAt: Date = Date()) {
+    public func add(_ title: String, createdAt: Date = Date(), updatedAt: Date? = nil) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        items.append(TodoItem(title: trimmed, createdAt: createdAt))
+        // Default updatedAt to createdAt so a backdated item groups under the
+        // day it was written, matching the tooltip rather than contradicting it.
+        items.append(TodoItem(title: trimmed, createdAt: createdAt, updatedAt: updatedAt ?? createdAt))
         save()
     }
 
-    public func toggle(_ id: UUID) {
+    public func toggle(_ id: UUID, updatedAt: Date = Date()) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         items[i].isDone.toggle()
+        items[i].updatedAt = updatedAt
         save()
     }
 
