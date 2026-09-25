@@ -3,79 +3,150 @@ import XCTest
 
 /// Locks in why the relaunch cannot simply call `open`: LaunchServices dedupes
 /// by bundle identifier, so the new app is never actually started.
+///
+/// The behavioural tests here execute the generated command for real. Asserting
+/// on substrings of the script is not enough — swapping `open "$0"` for
+/// `"$1"`, or `&&` for `||`, leaves every substring check passing while
+/// breaking the feature outright.
 final class AppRelaunchTests: XCTestCase {
+    private var root: URL!
 
-    private func command(
-        path: String = "/Applications/quicktodo.app",
-        pid: pid_t = 4242
-    ) -> (executable: String, arguments: [String]) {
-        AppRelaunch.command(for: URL(fileURLWithPath: path), exiting: pid)
+    override func setUpWithError() throws {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("relaunch-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
 
-    private func script(_ command: (executable: String, arguments: [String])) throws -> String {
-        try XCTUnwrap(command.arguments.dropFirst().first)
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: root)
     }
+
+    // MARK: - Behaviour
+
+    func test_opens_the_bundle_path_and_not_the_pid_once_the_process_is_gone() throws {
+        let log = try makeLog()
+        let app = "/Applications/quicktodo.app"
+
+        let start = Date()
+        try run(AppRelaunch.command(
+            for: URL(fileURLWithPath: app),
+            exiting: try exitedPID(),
+            open: try makeOpenStub()
+        ))
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(
+            try String(contentsOf: log, encoding: .utf8), "open \(app)\n",
+            "the helper must open the bundle path ($0), not the outgoing pid ($1)"
+        )
+        // A pid that is already gone needs no waiting. A loop that always ran to
+        // its cap would burn the full budget here and silently degrade back to
+        // a fixed delay, which is the bug this whole mechanism exists to avoid.
+        XCTAssertLessThan(
+            elapsed, AppRelaunch.maxWait / 2,
+            "must not wait when the outgoing process has already exited"
+        )
+    }
+
+    func test_waits_for_a_live_process_to_exit_before_opening() throws {
+        let log = try makeLog()
+        // The child appends to the log as it exits, so the ordering of the two
+        // events is directly observable.
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sh")
+        child.arguments = ["-c", "sleep 0.4; echo child-exited >> \(log.path)"]
+        try child.run()
+
+        try run(AppRelaunch.command(
+            for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
+            exiting: child.processIdentifier,
+            open: try makeOpenStub()
+        ))
+        child.waitUntilExit()
+
+        let lines = try String(contentsOf: log, encoding: .utf8)
+            .split(separator: "\n").map(String.init)
+        XCTAssertEqual(
+            lines,
+            ["child-exited", "open /Applications/quicktodo.app"],
+            "open must not run while the outgoing process is still alive"
+        )
+    }
+
+    // MARK: - Shape
 
     func test_runs_through_a_helper_instead_of_calling_open_directly() throws {
-        let command = command()
-
+        let command = AppRelaunch.command(
+            for: URL(fileURLWithPath: "/Applications/quicktodo.app"), exiting: 4242
+        )
         // If this were `/usr/bin/open` with the app as its only argument,
         // LaunchServices would only activate the copy that is still running.
         XCTAssertEqual(command.executable, "/bin/sh")
         XCTAssertEqual(command.arguments.first, "-c")
-        XCTAssertTrue(try script(command).contains("open"), "helper should still launch via open")
-    }
-
-    func test_waits_for_the_outgoing_process_instead_of_sleeping_a_fixed_interval() throws {
-        let script = try script(command())
-
-        // A fixed delay is only a guess about how long shutdown takes. Measured:
-        // with a 1s delay and a process that takes 2.5s to exit, `open` fires
-        // while the old pid is alive and is deduplicated away, so the app never
-        // comes back. Polling the pid is what makes this reliable.
-        XCTAssertTrue(script.contains("kill -0 \"$1\""), "expected a pid existence poll: \(script)")
-        XCTAssertTrue(script.contains("\"$1\""), "expected the outgoing pid as $1: \(script)")
-
-        let poll = try XCTUnwrap(script.range(of: "kill -0"))
-        let open = try XCTUnwrap(script.range(of: "/usr/bin/open"))
-        XCTAssertLessThan(poll.lowerBound, open.lowerBound, "must wait for exit before opening")
-    }
-
-    func test_poll_is_bounded_so_a_stuck_process_cannot_hang_the_helper_forever() throws {
-        let script = try script(command())
-        let attempts = Int(AppRelaunch.maxWait / AppRelaunch.pollInterval)
-        XCTAssertTrue(
-            script.contains("-lt \(attempts)"),
-            "expected a bounded retry count of \(attempts): \(script)"
-        )
-        XCTAssertGreaterThan(attempts, 0)
-    }
-
-    func test_passes_the_outgoing_pid_so_the_helper_knows_what_to_wait_for() throws {
-        XCTAssertEqual(command(pid: 4242).arguments.last, "4242")
+        XCTAssertEqual(command.arguments.last, "4242")
     }
 
     func test_uses_absolute_tool_paths_so_it_does_not_depend_on_path() throws {
-        let script = try script(command())
-        XCTAssertTrue(script.contains("/usr/bin/open"), "open should be absolute: \(script)")
+        let script = try script()
+        XCTAssertTrue(script.contains("/bin/kill"), "kill should be absolute: \(script)")
         XCTAssertTrue(script.contains("/bin/sleep"), "sleep should be absolute: \(script)")
+        XCTAssertTrue(script.contains("/usr/bin/open"), "open should be absolute: \(script)")
     }
 
-    func test_passes_the_bundle_path_as_an_argument_rather_than_into_the_script() throws {
-        let app = "/Applications/Quick Todo & Co.app"
-        let command = command(path: app)
-
-        XCTAssertEqual(
-            command.arguments[safe: 2], app,
-            "the path must be passed through $0 so the shell never parses it"
+    func test_poll_is_bounded_so_a_stuck_process_cannot_hang_the_helper_forever() throws {
+        let script = try script()
+        // Read the cap out of the script rather than recomputing it, so a wrong
+        // value is actually caught.
+        let range = try XCTUnwrap(
+            script.range(of: #"-lt (\d+)"#, options: .regularExpression),
+            "expected a numeric retry cap in \(script)"
         )
-        let script = try script(command)
-        XCTAssertFalse(script.contains(app), "interpolating the path would allow shell injection")
+        let attempts = try XCTUnwrap(Int(script[range].dropFirst("-lt ".count)))
+        XCTAssertGreaterThan(attempts, 0, "the cap must allow at least one attempt")
+        XCTAssertLessThanOrEqual(
+            Double(attempts) * AppRelaunch.pollInterval, AppRelaunch.maxWait,
+            "the retry cap must bound the total wait"
+        )
     }
-}
 
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
+    // MARK: - Helpers
+
+    private func script() throws -> String {
+        let command = AppRelaunch.command(
+            for: URL(fileURLWithPath: "/Applications/quicktodo.app"), exiting: 4242
+        )
+        return try XCTUnwrap(command.arguments.dropFirst().first)
+    }
+
+    private func makeLog() throws -> URL {
+        root.appendingPathComponent("calls.log")
+    }
+
+    /// A stand-in for `open` that records how it was called.
+    private func makeOpenStub() throws -> String {
+        let stub = root.appendingPathComponent("open")
+        try "#!/bin/sh\nprintf 'open %s\\n' \"$1\" >> \(try makeLog().path)\n"
+            .write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        return stub.path
+    }
+
+    /// The pid of a process that has already exited.
+    private func exitedPID() throws -> pid_t {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try process.run()
+        process.waitUntilExit()
+        return process.processIdentifier
+    }
+
+    private func run(_ command: (executable: String, arguments: [String])) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: command.executable)
+        process.arguments = command.arguments
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
     }
 }

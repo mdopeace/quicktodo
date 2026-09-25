@@ -23,15 +23,18 @@ public enum AppRelaunch {
     /// rather than sleeping a guessed interval, then opens. Waiting on the
     /// process is what makes this reliable; a fixed delay is only a guess about
     /// how long shutdown takes.
+    /// - Parameter openTool: the `open` binary to invoke. Injectable only so
+    ///   tests can observe how the helper is called.
     public static func command(
         for appURL: URL,
-        exiting pid: pid_t
+        exiting pid: pid_t,
+        open openTool: String = "/usr/bin/open"
     ) -> (executable: String, arguments: [String]) {
         let attempts = Int(maxWait / pollInterval)
         // Absolute tool paths so this does not depend on the caller's PATH, and
         // the bundle path passed as an argument so the shell never parses it.
         let script = "i=0; while /bin/kill -0 \"$1\" 2>/dev/null && [ \"$i\" -lt \(attempts) ]; "
-            + "do /bin/sleep \(pollInterval); i=$((i + 1)); done; exec /usr/bin/open \"$0\""
+            + "do /bin/sleep \(pollInterval); i=$((i + 1)); done; exec \(openTool) \"$0\""
         return ("/bin/sh", ["-c", script, appURL.path, String(pid)])
     }
 }
