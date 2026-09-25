@@ -32,16 +32,8 @@ struct TodoView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                HStack(alignment: .bottom, spacing: 8) {
-                    Text("QuickTodo")
-                        .font(.headline)
-                    Text("—")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("v\(appVersion)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("QuickTodo")
+                    .font(.headline)
                 Spacer()
                 Text("⌘⌥T")
                     .font(.caption)
@@ -58,6 +50,21 @@ struct TodoView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
+                    // Trailing overlay, not prompt text: keeps the look of a
+                    // placeholder hint while staying right-aligned for any
+                    // version length, and hides while typing so it never sits
+                    // under real input.
+                    .overlay(alignment: .trailing) {
+                        Text("v\(appVersion)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.trailing, 8)
+                            .opacity(draft.isEmpty ? 1 : 0)
+                            .allowsHitTesting(false)
+                            // Opacity alone leaves this in the a11y tree, so it
+                            // would still be read out while invisible.
+                            .accessibilityHidden(true)
+                    }
                 Button(action: submit) {
                     Image(systemName: "plus")
                 }
