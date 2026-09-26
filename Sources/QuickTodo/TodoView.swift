@@ -239,7 +239,7 @@ struct TodoView: View {
                 Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
             }
             .buttonStyle(.plain)
-            Text(item.title)
+            Text(item.title.replacingOccurrences(of: "->", with: "→"))
                 .strikethrough(item.isDone)
                 .foregroundStyle(item.isDone ? .secondary : .primary)
                 .lineLimit(expandedItems.contains(item.id) ? nil : 1)
