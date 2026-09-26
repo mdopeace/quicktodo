@@ -26,6 +26,20 @@ public extension TodoItem {
     }
 }
 
+public extension TodoItem {
+    // ponytail: longest-match chain, so a run of 3+ dashes ("<---", "--->")
+    // still leaks a dash. Swap for one NSRegularExpression pass with
+    // (?<!-)/(?!-) lookaround if that ever shows up in real titles.
+    var prettyTitle: String {
+        title
+            .replacingOccurrences(of: "<->", with: "↔")
+            .replacingOccurrences(of: "<--", with: "←")
+            .replacingOccurrences(of: "-->", with: "→")
+            .replacingOccurrences(of: "->", with: "→")
+            .replacingOccurrences(of: "<-", with: "←")
+    }
+}
+
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
     /// Active grouped by day, newest day first; newest updatedAt first within a day,

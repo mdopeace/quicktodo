@@ -267,4 +267,34 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(TodoStore.dayLabel(for: date), fmt.string(from: date))
         XCTAssertEqual(TodoStore.dayLabel(for: date), "Thu, Aug 13, 2026")
     }
+
+    func test_prettyTitle_swaps_arrows() throws {
+        XCTAssertEqual(TodoItem(title: "a -> b").prettyTitle, "a → b")
+        XCTAssertEqual(TodoItem(title: "a <- b").prettyTitle, "a ← b")
+        XCTAssertEqual(TodoItem(title: "a <-> b").prettyTitle, "a ↔ b")
+        XCTAssertEqual(TodoItem(title: "a --> b").prettyTitle, "a → b")
+    }
+
+    // "<->" and "-->" contain "->" and "<-", so a substitution that runs the
+    // short forms first leaves a stray bracket behind. Longest match has to win.
+    func test_prettyTitle_prefers_longest_arrow() throws {
+        XCTAssertEqual(TodoItem(title: "a <-> b").prettyTitle, "a ↔ b")
+        XCTAssertEqual(TodoItem(title: "a <-- b").prettyTitle, "a ← b")
+        XCTAssertEqual(TodoItem(title: "a --> b").prettyTitle, "a → b")
+        XCTAssertEqual(TodoItem(title: "-> a --> b <-> c <- d").prettyTitle,
+                       "→ a → b ↔ c ← d")
+    }
+
+    func test_prettyTitle_replaces_every_occurrence() throws {
+        XCTAssertEqual(TodoItem(title: "-> a -> b").prettyTitle, "→ a → b")
+    }
+
+    // Deliberately not substituted: "!=" and "=>" are common in code snippets,
+    // "1/2" collides with date shorthand, and "!" leads a lot of titles.
+    func test_prettyTitle_leaves_non_arrows_alone() throws {
+        XCTAssertEqual(TodoItem(title: "!= 429 -> 200").prettyTitle, "!= 429 → 200")
+        XCTAssertEqual(TodoItem(title: "x => y, a == b").prettyTitle, "x => y, a == b")
+        XCTAssertEqual(TodoItem(title: "ship 1/2 by 3/4").prettyTitle, "ship 1/2 by 3/4")
+        XCTAssertEqual(TodoItem(title: "plain text").prettyTitle, "plain text")
+    }
 }
