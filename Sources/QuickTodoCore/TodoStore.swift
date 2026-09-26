@@ -27,9 +27,11 @@ public extension TodoItem {
 }
 
 public extension TodoItem {
-    // ponytail: longest-match chain, so a run of 3+ dashes ("<---", "--->")
-    // still leaks a dash. Swap for one NSRegularExpression pass with
-    // (?<!-)/(?!-) lookaround if that ever shows up in real titles.
+    // ponytail: a chain of exact spellings, so any input that merely contains
+    // one strands the rest: "--->"→"-→", "<-->"→"←>", "->>"→"→>". Adding a rule
+    // per case is a treadmill. If a stranded title shows up, an NSRegularExpression
+    // using (?<!-)->(?!-) would leave those runs alone instead — deciding what a
+    // multi-dash run *means* is a separate call, not a mechanical fix.
     var prettyTitle: String {
         title
             .replacingOccurrences(of: "<->", with: "↔")

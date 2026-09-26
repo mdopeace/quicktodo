@@ -271,8 +271,6 @@ final class TodoStoreTests: XCTestCase {
     func test_prettyTitle_swaps_arrows() throws {
         XCTAssertEqual(TodoItem(title: "a -> b").prettyTitle, "a → b")
         XCTAssertEqual(TodoItem(title: "a <- b").prettyTitle, "a ← b")
-        XCTAssertEqual(TodoItem(title: "a <-> b").prettyTitle, "a ↔ b")
-        XCTAssertEqual(TodoItem(title: "a --> b").prettyTitle, "a → b")
     }
 
     // "<->" and "-->" contain "->" and "<-", so a substitution that runs the
