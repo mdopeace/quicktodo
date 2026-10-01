@@ -40,20 +40,24 @@ struct TodoView: View {
         return search
     }
 
-    private func matching(_ items: [TodoItem]) -> [TodoItem] {
+    private func matching(_ items: [TodoItem], _ query: String?) -> [TodoItem] {
         guard let query else { return items }
         return items.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
+    // Each property resolves `query` once. Reading it per section re-scans every
+    // item (S+5)x per body pass, and body re-runs on every keystroke because
+    // `draft` is bound directly in it.
     private var visibleSections: [(day: Date, items: [TodoItem])] {
-        store.activeByDay.compactMap { section -> (day: Date, items: [TodoItem])? in
-            let items = matching(section.items)
+        let q = query
+        return store.activeByDay.compactMap { section -> (day: Date, items: [TodoItem])? in
+            let items = matching(section.items, q)
             return items.isEmpty ? nil : (section.day, items)
         }
     }
 
-    private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems) }
-    private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems) }
+    private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
+    private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
     var body: some View {
         VStack(spacing: 0) {
