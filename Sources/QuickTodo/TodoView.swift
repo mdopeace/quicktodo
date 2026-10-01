@@ -7,6 +7,7 @@ struct TodoView: View {
     @ObservedObject var store: TodoStore
     @StateObject private var updater = Updater.shared
     @State private var draft = ""
+    @State private var search = ""
     @State private var scrollTopTick = 0
     @State private var expandedItems: Set<UUID> = []
     @State private var olderExpanded = false
@@ -29,6 +30,31 @@ struct TodoView: View {
         return Double(currentDone) / Double(currentTotal)
     }
 
+    /// Debounced view of `draft`. The zero-match fallback is resolved here, per
+    /// render, so deleting the last match mid-search degrades to the default list
+    /// instead of leaving an empty menu.
+    private var query: String? {
+        guard !search.isEmpty,
+              store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
+        else { return nil }
+        return search
+    }
+
+    private func matching(_ items: [TodoItem]) -> [TodoItem] {
+        guard let query else { return items }
+        return items.filter { $0.title.localizedCaseInsensitiveContains(query) }
+    }
+
+    private var visibleSections: [(day: Date, items: [TodoItem])] {
+        store.activeByDay.compactMap { section -> (day: Date, items: [TodoItem])? in
+            let items = matching(section.items)
+            return items.isEmpty ? nil : (section.day, items)
+        }
+    }
+
+    private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems) }
+    private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems) }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -46,7 +72,7 @@ struct TodoView: View {
                 .padding(.horizontal, 12)
 
             HStack(spacing: 8) {
-                TextField("Start typing...", text: $draft)
+                TextField("Add or search...", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
@@ -76,8 +102,17 @@ struct TodoView: View {
             .onAppear {
                 inputFocused = true
             }
+            .task(id: draft) {
+                // Each keystroke changes the id, which cancels the in-flight
+                // sleep, so only the final one survives to write `search`. The
+                // guard is load-bearing: `try?` swallows the CancellationError.
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+                search = TodoStore.searchQuery(draft) ?? ""
+            }
             .onReceive(NotificationCenter.default.publisher(for: .quickTodoMenuWillOpen)) { _ in
                 draft = ""
+                search = ""
                 inputFocused = false
                 expandedItems.removeAll()
                 scrollTopTick += 1
@@ -101,23 +136,23 @@ struct TodoView: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("listTop")
-                            ForEach(store.activeByDay, id: \.day) { section in
+                            ForEach(visibleSections, id: \.day) { section in
                                 sectionHeader(TodoStore.dayLabel(for: section.day))
                                 ForEach(section.items) { item in
                                     row(item)
                                 }
                             }
-                            if !store.recentCompletedItems.isEmpty {
+                            if !visibleRecentDone.isEmpty {
                                 sectionHeader("Completed")
-                                ForEach(store.recentCompletedItems) { item in
+                                ForEach(visibleRecentDone) { item in
                                     row(item)
                                 }
                             }
-                            if !store.olderCompletedItems.isEmpty {
+                            if !visibleOlderDone.isEmpty {
                                 DisclosureGroup(
                                     isExpanded: $olderExpanded,
                                     content: {
-                                        ForEach(store.olderCompletedItems) { item in
+                                        ForEach(visibleOlderDone) { item in
                                             row(item)
                                         }
                                     },
@@ -128,7 +163,7 @@ struct TodoView: View {
                                             }
                                         } label: {
                                             Text(
-                                                "Completed over a week ago (\(store.olderCompletedItems.count))"
+                                                "Completed over a week ago (\(visibleOlderDone.count))"
                                             )
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -203,6 +238,11 @@ struct TodoView: View {
             .padding(.vertical, 10)
         }
         .frame(width: MenuMetrics.width)  // height hugs content; AppDelegate caps it
+        // Filtering changes the list height without touching the store, so the
+        // hosting view has to be told to re-measure.
+        .onChange(of: search) { _ in
+            NotificationCenter.default.post(name: .quickTodoContentHeightChanged, object: nil)
+        }
     }
 
     private func submit() {
@@ -210,6 +250,9 @@ struct TodoView: View {
         // the second delivery then sees an empty draft and is ignored.
         let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
+        // Clear the filter too: waiting out the debounce would leave the old
+        // filtered rows on screen immediately after the item is added.
+        search = ""
         guard !title.isEmpty else { return }
         withAnimation(rowAnimation) {
             store.add(title)
