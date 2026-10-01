@@ -250,6 +250,22 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertTrue(store.olderCompletedItems.isEmpty)
     }
 
+    func test_search_query_needs_three_characters() throws {
+        XCTAssertNil(TodoStore.searchQuery(""))
+        XCTAssertNil(TodoStore.searchQuery("B"))
+        XCTAssertNil(TodoStore.searchQuery("Bu"))
+        XCTAssertEqual(TodoStore.searchQuery("Buy"), "Buy")
+        // Returned verbatim; case folding happens at match time, not here.
+        XCTAssertEqual(TodoStore.searchQuery("bUY"), "bUY")
+    }
+
+    func test_search_query_trims_before_counting() throws {
+        // A trailing space must not consume a character of the floor.
+        XCTAssertEqual(TodoStore.searchQuery("Buy "), "Buy")
+        XCTAssertNil(TodoStore.searchQuery("Bu "))
+        XCTAssertNil(TodoStore.searchQuery("   "))
+    }
+
     func test_dayLabel_formats_older_dates() throws {
         let cal = Calendar.current
         let today = Date()

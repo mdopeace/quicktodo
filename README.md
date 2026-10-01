@@ -52,6 +52,7 @@ open dist/quicktodo.app
 
 - Native SwiftUI menu-bar UI
 - Add, toggle, delete todos with keyboard
+- Live search from the same input (3+ characters filters after a 200ms debounce; no match falls back to the full list)
 - Progress tracker (completed/total)
 - Day-grouped list with "Completed" section
 - Global hotkey (⌘⌥T) to open menu

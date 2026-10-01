@@ -68,6 +68,14 @@ public final class TodoStore: ObservableObject {
     }()
     private let fileURL: URL
 
+    /// The draft becomes a search query at 3+ trimmed characters; below that it
+    /// is add-only input. Trimming first stops a trailing space from silently
+    /// eating a character of the floor.
+    public static func searchQuery(_ draft: String) -> String? {
+        let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return q.count >= 3 ? q : nil
+    }
+
     public init(fileURL: URL? = nil) {
         if let fileURL {
             self.fileURL = fileURL

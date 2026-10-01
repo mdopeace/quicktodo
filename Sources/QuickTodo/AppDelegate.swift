@@ -6,6 +6,9 @@ import SwiftUI
 
 extension Notification.Name {
     static let quickTodoMenuWillOpen = Notification.Name("quickTodoMenuWillOpen")
+    /// Posted when the list's height changes without the store changing — search
+    /// filtering. $items alone can't drive layout, or the frame goes stale.
+    static let quickTodoContentHeightChanged = Notification.Name("quickTodoContentHeightChanged")
 }
 
 // Single source for menu geometry (TodoView references MenuMetrics.width).
@@ -48,6 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.layoutMenu() }
             .store(in: &cancellables)
+        // Deferred via .receive(on:) so the re-measure lands after the view update
+        // that posted it, not re-entrantly inside it.
+        NotificationCenter.default.publisher(for: .quickTodoContentHeightChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.layoutMenu() }
+            .store(in: &cancellables)
 
         hotKeys.onHotKey = { [weak self] in self?.openMenu() }
         hotKeys.register()
@@ -70,8 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menuOpen = true
-        layoutMenu() // defense: guarantee size before showing
+        // Post before measuring: the handler clears the search filter, and sizing
+        // first would clamp the frame to the previous session's filtered list.
         NotificationCenter.default.post(name: .quickTodoMenuWillOpen, object: nil)
+        layoutMenu() // guarantee size before showing
 
         // Check for updates on menu open (debounced: max once per 4h)
         Updater.shared.checkOnMenuOpen()
