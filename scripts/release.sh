@@ -67,7 +67,14 @@ git commit -m "Bump version to $V"
 git push -u origin "$BR"
 gh pr create --base main --head "$BR" --title "Release v$V" \
     --body "Bumps the version to $V for release." >/dev/null
-gh pr merge --merge --delete-branch
+gh pr merge --merge --delete-branch || {
+    echo "error: could not merge $BR into main automatically." >&2
+    echo "       The version bump is committed and pushed, and its PR is still open:" >&2
+    echo "         https://github.com/$REPO/pulls" >&2
+    echo "       Merge it there to finish this release, or abandon it with:" >&2
+    echo "         git checkout main && git branch -D $BR" >&2
+    exit 1
+}
 git checkout main
 git fetch origin
 git reset --hard origin/main
