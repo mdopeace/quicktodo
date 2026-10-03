@@ -152,9 +152,19 @@ EOF
     git add -A
     git commit -m "quicktodo $V"
     git push -u origin "quicktodo-v$V"
-    gh pr create --base main --head "quicktodo-v$V" --title "quicktodo $V" \
-        --body "Releases quicktodo v$V." >/dev/null
-    gh pr merge --merge --delete-branch
+    # gh pr create prints the URL on stdout; keep it for the failure handler below.
+    TAP_PR_URL=$(gh pr create --base main --head "quicktodo-v$V" --title "quicktodo $V" \
+        --body "Releases quicktodo v$V.")
+    # Runs after the tag and GitHub Release are already published, so a failure
+    # here is a half-published release: v$V is live but Homebrew still serves
+    # the previous version. Name the PR instead of aborting silently.
+    gh pr merge --merge --delete-branch || {
+        echo "error: could not merge the tap PR, so Homebrew is not updated yet." >&2
+        echo "       GitHub Release v$V IS published — only the tap update failed." >&2
+        echo "       Merge this PR to finish, then 'brew update && brew upgrade quicktodo':" >&2
+        echo "         $TAP_PR_URL" >&2
+        exit 1
+    }
 )
 
 echo "Released v$V. Users can now: brew update && brew upgrade quicktodo"
