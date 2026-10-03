@@ -7,3 +7,6 @@ DerivedData/
 AppIcon.iconset/
 quicktodo.app.zip
 quicktodo.app.zip.sha256
+
+# Parent of the tap clone that release.sh checks out to mdopeace/ and removes.
+/mdopeace/

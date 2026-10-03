@@ -77,7 +77,10 @@ git reset --hard origin/main
 MARKETING_VERSION="$V" CURRENT_PROJECT_VERSION="$V" CREATE_ARCHIVE=1 ./scripts/package.sh local
 ARCHIVE="quicktodo.app.zip"
 CHECKSUM="$ARCHIVE.sha256"
-trap 'rm -f "$ARCHIVE" "$CHECKSUM"' EXIT
+# Also cleans the tap clone (step 6) and the parent dir its clone path implies,
+# so a mid-release failure doesn't leave an untracked dir in the repo root.
+# rmdir, not rm -rf, on the parent: it refuses when the dir still has contents.
+trap 'rm -f "$ARCHIVE" "$CHECKSUM"; rm -rf "$TAP"; rmdir "$(dirname "$TAP")" 2>/dev/null || true' EXIT
 
 # 4. Tag the release (tags are not branch-protected) and attach the app
 #    archive and its checksum to the GitHub Release.
@@ -143,6 +146,5 @@ EOF
         --body "Releases quicktodo v$V." >/dev/null
     gh pr merge --merge --delete-branch
 )
-rm -rf "$TAP"
 
 echo "Released v$V. Users can now: brew update && brew upgrade quicktodo"
