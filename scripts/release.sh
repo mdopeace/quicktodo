@@ -65,9 +65,19 @@ git checkout -b "$BR"
 git add Info.plist Sources/QuickTodoCore/Version.swift
 git commit -m "Bump version to $V"
 git push -u origin "$BR"
-gh pr create --base main --head "$BR" --title "Release v$V" \
-    --body "Bumps the version to $V for release." >/dev/null
-gh pr merge --merge --delete-branch
+# gh pr create prints the URL on stdout; keep it for the failure handler below.
+PR_URL=$(gh pr create --base main --head "$BR" --title "Release v$V" \
+    --body "Bumps the version to $V for release.")
+gh pr merge --merge --delete-branch || {
+    echo "error: could not merge $BR into main automatically." >&2
+    echo "       The version bump is committed and pushed, and its PR is still open:" >&2
+    echo "         $PR_URL" >&2
+    echo "       To release it, merge that PR, then re-run this script." >&2
+    echo "       To abandon it, remove the branch and the PR too:" >&2
+    echo "         git checkout main && git branch -D $BR && \\" >&2
+    echo "           git push origin --delete $BR && gh pr close $PR_URL" >&2
+    exit 1
+}
 git checkout main
 git fetch origin
 git reset --hard origin/main
