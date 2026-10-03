@@ -59,6 +59,12 @@ struct TodoView: View {
     private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
+    /// A query whose only survivors sit in the collapsed week-old section leaves
+    /// the panel a single header row, so the section opens itself.
+    private var onlyOlderMatches: Bool {
+        query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty && !visibleOlderDone.isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -119,6 +125,7 @@ struct TodoView: View {
                 search = ""
                 inputFocused = false
                 expandedItems.removeAll()
+                olderExpanded = false
                 scrollTopTick += 1
                 DispatchQueue.main.async { inputFocused = true }
             }
@@ -245,6 +252,9 @@ struct TodoView: View {
         // Filtering changes the list height without touching the store, so the
         // hosting view has to be told to re-measure.
         .onChange(of: search) { _ in
+            if onlyOlderMatches {
+                withAnimation(rowAnimation) { olderExpanded = true }
+            }
             NotificationCenter.default.post(name: .quickTodoContentHeightChanged, object: nil)
         }
     }
