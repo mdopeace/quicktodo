@@ -66,6 +66,14 @@ public final class TodoStore: ObservableObject {
         f.dateFormat = "EEE, MMM d, yyyy"
         return f
     }()
+
+    /// Counts for the progress footer, e.g. 1000 -> "1K". `compactName` is
+    /// locale-aware, and en_IN renders 1_000_000 as "10L", so the locale is
+    /// pinned like `dayFormatter`'s rather than left to the user's.
+    public static func compact(_ n: Int) -> String {
+        n.formatted(.number.locale(Locale(identifier: "en_US_POSIX")).notation(.compactName))
+    }
+
     private let fileURL: URL
 
     /// The draft becomes a search query at 3+ trimmed characters; below that it

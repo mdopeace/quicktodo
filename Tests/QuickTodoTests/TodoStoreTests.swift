@@ -283,4 +283,16 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(TodoStore.dayLabel(for: date), fmt.string(from: date))
         XCTAssertEqual(TodoStore.dayLabel(for: date), "Thu, Aug 13, 2026")
     }
+
+    func test_compact_uses_en_US_POSIX_not_the_system_locale() throws {
+        // The locale is load-bearing: without the pin these become "10L"/"23L"
+        // on an en_IN machine, silently showing the wrong number.
+        XCTAssertEqual(TodoStore.compact(0), "0")
+        XCTAssertEqual(TodoStore.compact(999), "999")
+        XCTAssertEqual(TodoStore.compact(1000), "1K")
+        XCTAssertEqual(TodoStore.compact(1500), "1.5K")
+        XCTAssertEqual(TodoStore.compact(999_999), "1M")
+        XCTAssertEqual(TodoStore.compact(1_000_000), "1M")
+        XCTAssertEqual(TodoStore.compact(2_300_000), "2.3M")
+    }
 }

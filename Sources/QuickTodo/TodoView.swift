@@ -222,7 +222,7 @@ struct TodoView: View {
                     }
                     // Compact notation keeps the bar readable once counts pass
                     // three digits; the bar itself stays sized off the real ints.
-                    Text("\(compact(currentDone))/\(compact(currentTotal)) (\(compact(olderDone)))")
+                    Text("\(TodoStore.compact(currentDone))/\(TodoStore.compact(currentTotal)) (\(TodoStore.compact(olderDone)))")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
                         // Compact notation reads as literal "1.2K" out loud, so
@@ -264,14 +264,6 @@ struct TodoView: View {
             }
             NotificationCenter.default.post(name: .quickTodoContentHeightChanged, object: nil)
         }
-    }
-
-    /// Pinned to en_US_POSIX like `dayLabel`: compact notation is locale-aware and
-    /// en_IN renders 1_000_000 as "10L", not the "1M" the other labels use.
-    private static let compactLocale = Locale(identifier: "en_US_POSIX")
-
-    private func compact(_ n: Int) -> String {
-        n.formatted(.number.locale(Self.compactLocale).notation(.compactName))
     }
 
     private func submit() {
