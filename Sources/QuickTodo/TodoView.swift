@@ -3,6 +3,14 @@ import SwiftUI
 
 private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 
+private struct ProgressTracker {
+    /// 0...1, drives the bar's fill and the green-at-complete styling.
+    let value: Double
+    let text: String
+    /// Spoken form of `text` for VoiceOver.
+    let spoken: String
+}
+
 struct TodoView: View {
     @ObservedObject var store: TodoStore
     @StateObject private var updater = Updater.shared
@@ -13,21 +21,24 @@ struct TodoView: View {
     @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
-    private var totalDone: Int {
-        store.items.filter(\.isDone).count
-    }
-    private var olderDone: Int {
-        store.olderCompletedItems.count
-    }
-    private var currentDone: Int {
-        totalDone - olderDone
-    }
-    private var currentTotal: Int {
-        store.items.count - olderDone
-    }
-    private var progressValue: Double {
-        guard currentTotal > 0 else { return 0 }
-        return Double(currentDone) / Double(currentTotal)
+    /// Bind to a `let` in `body` — reading this inline re-walks the store on
+    /// every keystroke.
+    private var progress: ProgressTracker {
+        let older = store.olderCompletedItems.count
+        let done = store.items.filter(\.isDone).count - older
+        let total = store.items.count - older
+        let value = total > 0 ? Double(done) / Double(total) : 0
+        return ProgressTracker(
+            value: value,
+            // n/n stays raw: it's read against the bar, and compacting rounds
+            // 1199/1200 and 1200/1200 onto the same "1.2K/1.2K".
+            text: "\(done)/\(total) (\(TodoStore.compact(older)))",
+            // "1.5K" is announced literally, so spell the counts out. Drop the
+            // trailing clause when empty.
+            spoken: older > 0
+                ? "\(done) of \(total) done, \(older) completed over a week ago"
+                : "\(done) of \(total) done"
+        )
     }
 
     /// Debounced view of `draft`. The zero-match fallback is resolved here, per
@@ -66,7 +77,8 @@ struct TodoView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let progress = progress
+        return VStack(spacing: 0) {
             HStack {
                 Text("QuickTodo")
                     .font(.headline)
@@ -159,11 +171,14 @@ struct TodoView: View {
                                     row(item)
                                 }
                             }
-                            if !visibleOlderDone.isEmpty {
+                            // Bound once: every read walks the store and
+                            // re-filters by query.
+                            let visibleOlder = visibleOlderDone
+                            if !visibleOlder.isEmpty {
                                 DisclosureGroup(
                                     isExpanded: $olderExpanded,
                                     content: {
-                                        ForEach(visibleOlderDone) { item in
+                                        ForEach(visibleOlder) { item in
                                             row(item)
                                         }
                                     },
@@ -174,7 +189,7 @@ struct TodoView: View {
                                             }
                                         } label: {
                                             Text(
-                                                "Completed over a week ago (\(visibleOlderDone.count))"
+                                                "Completed over a week ago (\(TodoStore.compact(visibleOlder.count)))"
                                             )
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -182,6 +197,11 @@ struct TodoView: View {
                                             .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
+                                        // On the Button, which is what VoiceOver
+                                        // focuses — not the Text inside it.
+                                        .accessibilityLabel(
+                                            "Completed over a week ago, \(visibleOlder.count)"
+                                        )
                                     }
                                 )
                                 .padding(.horizontal, 12)
@@ -217,12 +237,13 @@ struct TodoView: View {
                             .fill(Color.secondary.opacity(0.18))
                             .frame(width: 44, height: 6)
                         Capsule()
-                            .fill(progressValue >= 1 ? .green : .blue)
-                            .frame(width: 44 * CGFloat(progressValue), height: 6)
+                            .fill(progress.value >= 1 ? .green : .blue)
+                            .frame(width: 44 * CGFloat(progress.value), height: 6)
                     }
-                    Text("\(currentDone)/\(currentTotal) (\(olderDone))")
+                    Text(progress.text)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(progressValue >= 1 ? .green : .secondary)
+                        .foregroundStyle(progress.value >= 1 ? .green : .secondary)
+                        .accessibilityLabel(progress.spoken)
                 }
                 Spacer()
                 UpdateIndicator(state: updater.state) {

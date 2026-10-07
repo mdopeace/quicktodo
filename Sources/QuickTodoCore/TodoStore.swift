@@ -60,12 +60,23 @@ public final class TodoStore: ObservableObject {
         return dayFormatter.string(from: date)
     }
 
+    /// A count for a UI label, e.g. 1000 -> "1K". Locale pinned to match
+    /// `dayFormatter`: en_IN would render 1_000_000 as "10L".
+    public static func compact(_ n: Int) -> String {
+        n.formatted(compactCount)
+    }
+
+    private static let compactCount: IntegerFormatStyle<Int> = .number
+        .locale(Locale(identifier: "en_US_POSIX"))
+        .notation(.compactName)
+
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "EEE, MMM d, yyyy"
         return f
     }()
+
     private let fileURL: URL
 
     /// The draft becomes a search query at 3+ trimmed characters; below that it
