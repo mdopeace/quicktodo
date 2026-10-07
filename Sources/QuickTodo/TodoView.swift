@@ -42,8 +42,12 @@ struct TodoView: View {
             // the same "1.2K/1.2K".
             text: "\(done)/\(total) (\(TodoStore.compact(older)))",
             // Compact notation reads as literal "10K" out loud, so VoiceOver
-            // gets the raw counts spelled out instead.
-            spoken: "\(done) of \(total) done, \(older) older"
+            // gets the raw counts spelled out instead. The trailing clause is
+            // dropped when there's nothing in it — "0 older" on every list
+            // without week-old items is noise on every swipe past.
+            spoken: older > 0
+                ? "\(done) of \(total) done, \(older) older"
+                : "\(done) of \(total) done"
         )
     }
 
@@ -198,15 +202,19 @@ struct TodoView: View {
                                             .foregroundStyle(.secondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .contentShape(Rectangle())
-                                            // Same reason as the footer: "10K" is
-                                            // announced literally, so spell out the
-                                            // count. No "items" noun — it would read
-                                            // "1 items" for a single row.
-                                            .accessibilityLabel(
-                                                "Completed over a week ago, \(visibleOlderDone.count)"
-                                            )
                                         }
                                         .buttonStyle(.plain)
+                                        // On the Button, not the Text inside it: the
+                                        // Button is what VoiceOver focuses, so the label
+                                        // lands there without depending on SwiftUI
+                                        // propagating it up through the button and then
+                                        // through the DisclosureGroup. Same reason as the
+                                        // footer — "10K" is announced literally, so spell
+                                        // out the count. No "items" noun, it would read
+                                        // "1 items" for a single row.
+                                        .accessibilityLabel(
+                                            "Completed over a week ago, \(visibleOlderDone.count)"
+                                        )
                                     }
                                 )
                                 .padding(.horizontal, 12)
