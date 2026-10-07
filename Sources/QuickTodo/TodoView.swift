@@ -194,12 +194,16 @@ struct TodoView: View {
                             // `olderCompletedItems` and filters it by `query`
                             // again, and the block below needs it three more
                             // times for the ForEach and both count labels.
-                            let olderDone = visibleOlderDone
-                            if !olderDone.isEmpty {
+                            // Named for what it holds, not for the footer: this is
+                            // the query-filtered list, where the footer's count is
+                            // the unfiltered total. Same identifier meant opposite
+                            // things earlier in this branch.
+                            let visibleOlder = visibleOlderDone
+                            if !visibleOlder.isEmpty {
                                 DisclosureGroup(
                                     isExpanded: $olderExpanded,
                                     content: {
-                                        ForEach(olderDone) { item in
+                                        ForEach(visibleOlder) { item in
                                             row(item)
                                         }
                                     },
@@ -210,7 +214,7 @@ struct TodoView: View {
                                             }
                                         } label: {
                                             Text(
-                                                "Completed over a week ago (\(TodoStore.compact(olderDone.count)))"
+                                                "Completed over a week ago (\(TodoStore.compact(visibleOlder.count)))"
                                             )
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -227,7 +231,7 @@ struct TodoView: View {
                                         // out the count. No "items" noun, it would read
                                         // "1 items" for a single row.
                                         .accessibilityLabel(
-                                            "Completed over a week ago, \(olderDone.count)"
+                                            "Completed over a week ago, \(visibleOlder.count)"
                                         )
                                     }
                                 )
