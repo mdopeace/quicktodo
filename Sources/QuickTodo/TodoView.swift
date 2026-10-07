@@ -3,7 +3,7 @@ import SwiftUI
 
 private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 
-private struct Progress {
+private struct ProgressTracker {
     /// 0...1, drives the bar's fill and the green-at-complete styling.
     let value: Double
     let text: String
@@ -29,12 +29,12 @@ struct TodoView: View {
     /// (`draft` is bound directly in it), so that was ~5 list walks per
     /// character typed. Bind the result to a `let` in `body` and read fields
     /// off it; do not inline `progress` back into the view tree.
-    private var progress: Progress {
+    private var progress: ProgressTracker {
         let older = store.olderCompletedItems.count
         let done = store.items.filter(\.isDone).count - older
         let total = store.items.count - older
         let value = total > 0 ? Double(done) / Double(total) : 0
-        return Progress(
+        return ProgressTracker(
             value: value,
             // Only the trailing older-done count is compacted. The n/n pair
             // stays raw: it's read against the bar right beside it, so it has

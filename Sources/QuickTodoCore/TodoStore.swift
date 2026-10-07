@@ -61,15 +61,21 @@ public final class TodoStore: ObservableObject {
     }
 
     /// A count for a UI label, e.g. 1000 -> "1K". Two call sites, which differ:
-    /// the progress footer's trailing older-done count, and the week-old
-    /// section header's count, which is search-filtered and can exceed the rows
-    /// on screen while a query is active.
+    /// the week-old section header shows the count of what it renders, which
+    /// the active search filters down; the progress footer's trailing count is
+    /// the unfiltered total.
     ///
     /// `compactName` is locale-aware and en_IN renders 1_000_000 as "10L", so
-    /// the locale is pinned like `dayFormatter`'s rather than the user's.
+    /// the locale is pinned like `dayFormatter`'s rather than the user's. Held
+    /// in a `static let` rather than rebuilt per call — this sits on the
+    /// keystroke path.
     public static func compact(_ n: Int) -> String {
-        n.formatted(.number.locale(Locale(identifier: "en_US_POSIX")).notation(.compactName))
+        n.formatted(compactCount)
     }
+
+    private static let compactCount: IntegerFormatStyle<Int> = .number
+        .locale(Locale(identifier: "en_US_POSIX"))
+        .notation(.compactName)
 
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
