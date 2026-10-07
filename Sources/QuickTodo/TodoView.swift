@@ -23,12 +23,13 @@ struct TodoView: View {
 
     /// Everything the footer bar renders, in one pass.
     ///
-    /// Each count was its own computed property, and `body` reads them five
-    /// times — three of those reads reach `olderCompletedItems`, an un-memoized
-    /// `filter` + `sorted` over every item. `body` re-runs on every keystroke
-    /// (`draft` is bound directly in it), so that was ~5 list walks per
-    /// character typed. Bind the result to a `let` in `body` and read fields
-    /// off it; do not inline `progress` back into the view tree.
+    /// Each count was its own computed property, and `body` read them at five
+    /// call sites — nine property evaluations, twelve walks of
+    /// `olderCompletedItems`, an un-memoized `filter` + `sorted` over every
+    /// item. `body` re-runs on every keystroke (`draft` is bound directly in
+    /// it), so that was twelve list walks per character typed. Bind the result
+    /// to a `let` in `body` and read fields off it; do not inline `progress`
+    /// back into the view tree.
     private var progress: ProgressTracker {
         let older = store.olderCompletedItems.count
         let done = store.items.filter(\.isDone).count - older
@@ -182,10 +183,14 @@ struct TodoView: View {
                                 }
                             }
                             if !visibleOlderDone.isEmpty {
+                                // Bound once: each read of `visibleOlderDone` walks
+                                // `olderCompletedItems` and filters it by `query`
+                                // again, and the block below reads it four times.
+                                let olderDone = visibleOlderDone
                                 DisclosureGroup(
                                     isExpanded: $olderExpanded,
                                     content: {
-                                        ForEach(visibleOlderDone) { item in
+                                        ForEach(olderDone) { item in
                                             row(item)
                                         }
                                     },
@@ -196,7 +201,7 @@ struct TodoView: View {
                                             }
                                         } label: {
                                             Text(
-                                                "Completed over a week ago (\(TodoStore.compact(visibleOlderDone.count)))"
+                                                "Completed over a week ago (\(TodoStore.compact(olderDone.count)))"
                                             )
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -213,7 +218,7 @@ struct TodoView: View {
                                         // out the count. No "items" noun, it would read
                                         // "1 items" for a single row.
                                         .accessibilityLabel(
-                                            "Completed over a week ago, \(visibleOlderDone.count)"
+                                            "Completed over a week ago, \(olderDone.count)"
                                         )
                                     }
                                 )
