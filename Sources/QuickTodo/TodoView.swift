@@ -21,20 +21,8 @@ struct TodoView: View {
     @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
-    /// Everything the footer bar renders, in one pass.
-    ///
-    /// Footer only: each count was its own computed property, and the footer
-    /// read them at five call sites — nine property evaluations, twelve walks
-    /// of `olderCompletedItems`, an un-memoized `filter` + `sorted` over every
-    /// item. `body` re-runs on every keystroke (`draft` is bound directly in
-    /// it), so that was twelve list walks per character typed. Now one, here.
-    ///
-    /// The list above still walks `olderCompletedItems` a second time for the
-    /// week-old section, and `visibleRecentDone` is read twice — both
-    /// predate this and are untouched. So `body` as a whole is not yet
-    /// single-pass; don't infer that from this one. Bind the result to a `let`
-    /// in `body` and read fields off it; do not inline `progress` back into
-    /// the view tree.
+    /// Bind to a `let` in `body` — reading this inline re-walks the store on
+    /// every keystroke.
     private var progress: ProgressTracker {
         let older = store.olderCompletedItems.count
         let done = store.items.filter(\.isDone).count - older
@@ -42,17 +30,11 @@ struct TodoView: View {
         let value = total > 0 ? Double(done) / Double(total) : 0
         return ProgressTracker(
             value: value,
-            // Only the trailing older-done count is compacted. The n/n pair
-            // stays raw: it's read against the bar right beside it, so it has
-            // to stay exact — compacting rounds 1199/1200 and 1200/1200 onto
-            // the same "1.2K/1.2K".
+            // n/n stays raw: it's read against the bar, and compacting rounds
+            // 1199/1200 and 1200/1200 onto the same "1.2K/1.2K".
             text: "\(done)/\(total) (\(TodoStore.compact(older)))",
-            // Compact notation reads as literal "10K" out loud, so VoiceOver
-            // gets the raw counts spelled out instead. The trailing clause is
-            // dropped when there's nothing in it — "0 older" on every list
-            // without week-old items is noise on every swipe past. Phrased to
-            // match the week-old header's label, so "older" means the same
-            // thing wherever it's spoken.
+            // "1.5K" is announced literally, so spell the counts out. Drop the
+            // trailing clause when empty.
             spoken: older > 0
                 ? "\(done) of \(total) done, \(older) completed over a week ago"
                 : "\(done) of \(total) done"
@@ -189,15 +171,8 @@ struct TodoView: View {
                                     row(item)
                                 }
                             }
-                            // Hoisted above the guard so the guard reuses this:
-                            // every read of `visibleOlderDone` walks
-                            // `olderCompletedItems` and filters it by `query`
-                            // again, and the block below needs it three more
-                            // times for the ForEach and both count labels.
-                            // Named for what it holds, not for the footer: this is
-                            // the query-filtered list, where the footer's count is
-                            // the unfiltered total. Same identifier meant opposite
-                            // things earlier in this branch.
+                            // Bound once: every read walks the store and
+                            // re-filters by query.
                             let visibleOlder = visibleOlderDone
                             if !visibleOlder.isEmpty {
                                 DisclosureGroup(
@@ -222,14 +197,8 @@ struct TodoView: View {
                                             .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
-                                        // On the Button, not the Text inside it: the
-                                        // Button is what VoiceOver focuses, so the label
-                                        // lands there without depending on SwiftUI
-                                        // propagating it up through the button and then
-                                        // through the DisclosureGroup. Same reason as the
-                                        // footer — "10K" is announced literally, so spell
-                                        // out the count. No "items" noun, it would read
-                                        // "1 items" for a single row.
+                                        // On the Button, which is what VoiceOver
+                                        // focuses — not the Text inside it.
                                         .accessibilityLabel(
                                             "Completed over a week ago, \(visibleOlder.count)"
                                         )
