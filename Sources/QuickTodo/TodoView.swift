@@ -45,9 +45,11 @@ struct TodoView: View {
             // Compact notation reads as literal "10K" out loud, so VoiceOver
             // gets the raw counts spelled out instead. The trailing clause is
             // dropped when there's nothing in it — "0 older" on every list
-            // without week-old items is noise on every swipe past.
+            // without week-old items is noise on every swipe past. Phrased to
+            // match the week-old header's label, so "older" means the same
+            // thing wherever it's spoken.
             spoken: older > 0
-                ? "\(done) of \(total) done, \(older) older"
+                ? "\(done) of \(total) done, \(older) completed over a week ago"
                 : "\(done) of \(total) done"
         )
     }
@@ -182,11 +184,13 @@ struct TodoView: View {
                                     row(item)
                                 }
                             }
-                            if !visibleOlderDone.isEmpty {
-                                // Bound once: each read of `visibleOlderDone` walks
-                                // `olderCompletedItems` and filters it by `query`
-                                // again, and the block below reads it four times.
-                                let olderDone = visibleOlderDone
+                            // Hoisted above the guard so the guard reuses this:
+                            // every read of `visibleOlderDone` walks
+                            // `olderCompletedItems` and filters it by `query`
+                            // again, and the block below needs it three more
+                            // times for the ForEach and both count labels.
+                            let olderDone = visibleOlderDone
+                            if !olderDone.isEmpty {
                                 DisclosureGroup(
                                     isExpanded: $olderExpanded,
                                     content: {
