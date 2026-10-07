@@ -3,6 +3,14 @@ import SwiftUI
 
 private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 
+private struct Progress {
+    /// 0...1, drives the bar's fill and the green-at-complete styling.
+    let value: Double
+    let text: String
+    /// Spoken form of `text` for VoiceOver.
+    let spoken: String
+}
+
 struct TodoView: View {
     @ObservedObject var store: TodoStore
     @StateObject private var updater = Updater.shared
@@ -13,35 +21,25 @@ struct TodoView: View {
     @State private var olderExpanded = false
     @FocusState private var inputFocused: Bool
 
-    private var totalDone: Int {
-        store.items.filter(\.isDone).count
-    }
-    private var olderDone: Int {
-        store.olderCompletedItems.count
-    }
-    private var currentDone: Int {
-        totalDone - olderDone
-    }
-    private var currentTotal: Int {
-        store.items.count - olderDone
-    }
-    private var progressValue: Double {
-        guard currentTotal > 0 else { return 0 }
-        return Double(currentDone) / Double(currentTotal)
-    }
-
-    /// Visible and spoken forms of the footer tracker, captured once per read:
-    /// each of `currentDone`/`currentTotal`/`olderDone` walks `olderCompletedItems`,
-    /// which is un-memoized, and body re-runs on every keystroke.
-    private var progressTracker: (text: String, spoken: String) {
-        let done = currentDone
-        let total = currentTotal
-        let older = olderDone
-        // Only the trailing older-done count is compacted. The n/n pair stays
-        // raw: it's read against the bar right beside it, so it has to stay
-        // exact — compacting rounds 1199/1200 and 1200/1200 onto the same
-        // "1.2K/1.2K".
-        return (
+    /// Everything the footer bar renders, in one pass.
+    ///
+    /// Each count was its own computed property, and `body` reads them five
+    /// times — three of those reads reach `olderCompletedItems`, an un-memoized
+    /// `filter` + `sorted` over every item. `body` re-runs on every keystroke
+    /// (`draft` is bound directly in it), so that was ~5 list walks per
+    /// character typed. Bind the result to a `let` in `body` and read fields
+    /// off it; do not inline `progress` back into the view tree.
+    private var progress: Progress {
+        let older = store.olderCompletedItems.count
+        let done = store.items.filter(\.isDone).count - older
+        let total = store.items.count - older
+        let value = total > 0 ? Double(done) / Double(total) : 0
+        return Progress(
+            value: value,
+            // Only the trailing older-done count is compacted. The n/n pair
+            // stays raw: it's read against the bar right beside it, so it has
+            // to stay exact — compacting rounds 1199/1200 and 1200/1200 onto
+            // the same "1.2K/1.2K".
             text: "\(done)/\(total) (\(TodoStore.compact(older)))",
             // Compact notation reads as literal "10K" out loud, so VoiceOver
             // gets the raw counts spelled out instead.
@@ -85,7 +83,8 @@ struct TodoView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let progress = progress
+        return VStack(spacing: 0) {
             HStack {
                 Text("QuickTodo")
                     .font(.headline)
@@ -243,13 +242,13 @@ struct TodoView: View {
                             .fill(Color.secondary.opacity(0.18))
                             .frame(width: 44, height: 6)
                         Capsule()
-                            .fill(progressValue >= 1 ? .green : .blue)
-                            .frame(width: 44 * CGFloat(progressValue), height: 6)
+                            .fill(progress.value >= 1 ? .green : .blue)
+                            .frame(width: 44 * CGFloat(progress.value), height: 6)
                     }
-                    Text(progressTracker.text)
+                    Text(progress.text)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(progressValue >= 1 ? .green : .secondary)
-                        .accessibilityLabel(progressTracker.spoken)
+                        .foregroundStyle(progress.value >= 1 ? .green : .secondary)
+                        .accessibilityLabel(progress.spoken)
                 }
                 Spacer()
                 UpdateIndicator(state: updater.state) {
