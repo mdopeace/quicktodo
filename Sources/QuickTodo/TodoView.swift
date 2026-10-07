@@ -220,13 +220,15 @@ struct TodoView: View {
                             .fill(progressValue >= 1 ? .green : .blue)
                             .frame(width: 44 * CGFloat(progressValue), height: 6)
                     }
-                    // Compact notation keeps the bar readable once counts pass
-                    // three digits; the bar itself stays sized off the real ints.
-                    Text("\(TodoStore.compact(currentDone))/\(TodoStore.compact(currentTotal)) (\(TodoStore.compact(olderDone)))")
+                    // Only the trailing older-done count is compacted. The n/n
+                    // pair stays raw: it's read against the bar right beside it,
+                    // so it has to stay exact — compacting rounds 1199/1200 and
+                    // 1200/1200 onto the same "1.2K/1.2K".
+                    Text("\(currentDone)/\(currentTotal) (\(TodoStore.compact(olderDone)))")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
-                        // Compact notation reads as literal "1.2K" out loud, so
-                        // VoiceOver gets the raw counts spelled out instead.
+                        // Compact notation reads as literal "10K" out loud, so
+                        // VoiceOver gets the raw count spelled out instead.
                         .accessibilityLabel(
                             "\(currentDone) of \(currentTotal) done, \(olderDone) older"
                         )
