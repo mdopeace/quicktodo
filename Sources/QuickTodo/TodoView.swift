@@ -23,13 +23,18 @@ struct TodoView: View {
 
     /// Everything the footer bar renders, in one pass.
     ///
-    /// Each count was its own computed property, and `body` read them at five
-    /// call sites — nine property evaluations, twelve walks of
-    /// `olderCompletedItems`, an un-memoized `filter` + `sorted` over every
+    /// Footer only: each count was its own computed property, and the footer
+    /// read them at five call sites — nine property evaluations, twelve walks
+    /// of `olderCompletedItems`, an un-memoized `filter` + `sorted` over every
     /// item. `body` re-runs on every keystroke (`draft` is bound directly in
-    /// it), so that was twelve list walks per character typed. Bind the result
-    /// to a `let` in `body` and read fields off it; do not inline `progress`
-    /// back into the view tree.
+    /// it), so that was twelve list walks per character typed. Now one, here.
+    ///
+    /// The list above still walks `olderCompletedItems` a second time for the
+    /// week-old section, and `visibleRecentDone` is read twice — both
+    /// predate this and are untouched. So `body` as a whole is not yet
+    /// single-pass; don't infer that from this one. Bind the result to a `let`
+    /// in `body` and read fields off it; do not inline `progress` back into
+    /// the view tree.
     private var progress: ProgressTracker {
         let older = store.olderCompletedItems.count
         let done = store.items.filter(\.isDone).count - older
