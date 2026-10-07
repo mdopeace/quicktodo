@@ -174,12 +174,17 @@ struct TodoView: View {
                                             }
                                         } label: {
                                             Text(
-                                                "Completed over a week ago (\(visibleOlderDone.count))"
+                                                "Completed over a week ago (\(TodoStore.compact(visibleOlderDone.count)))"
                                             )
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .contentShape(Rectangle())
+                                            // Same reason as the footer: "10K" is
+                                            // announced literally, so spell out the count.
+                                            .accessibilityLabel(
+                                                "Completed over a week ago, \(visibleOlderDone.count) items"
+                                            )
                                         }
                                         .buttonStyle(.plain)
                                     }
