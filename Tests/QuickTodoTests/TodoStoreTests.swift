@@ -285,11 +285,12 @@ final class TodoStoreTests: XCTestCase {
     }
 
     func test_compact_renders_compact_notation() throws {
-        // Doubles as the regression guard for the en_US_POSIX pin inside
-        // `compact`: on a machine whose locale spells large numbers differently
-        // (en_IN renders 1_000_000 as "10L", 2_300_000 as "23L") dropping the pin
-        // fails the last two assertions. On an en_US machine the pin is a no-op,
-        // so this passes either way — it verifies output, not the pin directly.
+        // Plain output assertions. Note this does NOT directly verify the
+        // en_US_POSIX pin inside `compact`: `Locale.current` is read-only, so a
+        // test can't swap the ambient locale to prove the pin is doing anything.
+        // Deleting the pin only fails this suite on a machine whose locale
+        // spells large numbers differently (en_IN: 1_000_000 -> "10L",
+        // 2_300_000 -> "23L"); on en_US it passes either way.
         XCTAssertEqual(TodoStore.compact(0), "0")
         XCTAssertEqual(TodoStore.compact(999), "999")
         XCTAssertEqual(TodoStore.compact(1000), "1K")

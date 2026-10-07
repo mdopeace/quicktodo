@@ -30,6 +30,25 @@ struct TodoView: View {
         return Double(currentDone) / Double(currentTotal)
     }
 
+    /// Visible and spoken forms of the footer tracker, captured once per read:
+    /// each of `currentDone`/`currentTotal`/`olderDone` walks `olderCompletedItems`,
+    /// which is un-memoized, and body re-runs on every keystroke.
+    private var progressTracker: (text: String, spoken: String) {
+        let done = currentDone
+        let total = currentTotal
+        let older = olderDone
+        // Only the trailing older-done count is compacted. The n/n pair stays
+        // raw: it's read against the bar right beside it, so it has to stay
+        // exact — compacting rounds 1199/1200 and 1200/1200 onto the same
+        // "1.2K/1.2K".
+        return (
+            text: "\(done)/\(total) (\(TodoStore.compact(older)))",
+            // Compact notation reads as literal "10K" out loud, so VoiceOver
+            // gets the raw counts spelled out instead.
+            spoken: "\(done) of \(total) done, \(older) older"
+        )
+    }
+
     /// Debounced view of `draft`. The zero-match fallback is resolved here, per
     /// render, so deleting the last match mid-search degrades to the default list
     /// instead of leaving an empty menu.
@@ -181,9 +200,11 @@ struct TodoView: View {
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .contentShape(Rectangle())
                                             // Same reason as the footer: "10K" is
-                                            // announced literally, so spell out the count.
+                                            // announced literally, so spell out the
+                                            // count. No "items" noun — it would read
+                                            // "1 items" for a single row.
                                             .accessibilityLabel(
-                                                "Completed over a week ago, \(visibleOlderDone.count) items"
+                                                "Completed over a week ago, \(visibleOlderDone.count)"
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -225,18 +246,10 @@ struct TodoView: View {
                             .fill(progressValue >= 1 ? .green : .blue)
                             .frame(width: 44 * CGFloat(progressValue), height: 6)
                     }
-                    // Only the trailing older-done count is compacted. The n/n
-                    // pair stays raw: it's read against the bar right beside it,
-                    // so it has to stay exact — compacting rounds 1199/1200 and
-                    // 1200/1200 onto the same "1.2K/1.2K".
-                    Text("\(currentDone)/\(currentTotal) (\(TodoStore.compact(olderDone)))")
+                    Text(progressTracker.text)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(progressValue >= 1 ? .green : .secondary)
-                        // Compact notation reads as literal "10K" out loud, so
-                        // VoiceOver gets the raw count spelled out instead.
-                        .accessibilityLabel(
-                            "\(currentDone) of \(currentTotal) done, \(olderDone) older"
-                        )
+                        .accessibilityLabel(progressTracker.spoken)
                 }
                 Spacer()
                 UpdateIndicator(state: updater.state) {
