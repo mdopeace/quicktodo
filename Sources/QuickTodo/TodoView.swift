@@ -3,6 +3,31 @@ import SwiftUI
 
 private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 
+/// Replaces `DisclosureGroup`'s built-in layout so the header lines up with
+/// `sectionHeader` and the content rows sit at the same 12pt inset as every
+/// other row. The default style reserves ~4pt of trailing space on the label
+/// row that Apple documents no value for, and the group's own horizontal
+/// padding stacked on the rows' padding (24pt total).
+///
+/// Draws no disclosure control of its own: `label` supplies the chevron and the
+/// toggle, so there is exactly one thing to click and one VoiceOver stop.
+private struct InlineDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 0) {
+            configuration.label
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                // Collapsed, the header is the last row before the footer, so it
+                // gets the same 8pt of trailing air the top padding gives the
+                // row above. Expanded, 8pt would separate it from its own rows.
+                .padding(.bottom, configuration.isExpanded ? 2 : 8)
+            if configuration.isExpanded {
+                configuration.content
+            }
+        }
+    }
+}
+
 private struct ProgressTracker {
     /// 0...1, drives the bar's fill and the green-at-complete styling.
     let value: Double
@@ -46,7 +71,7 @@ struct TodoView: View {
     /// instead of leaving an empty menu.
     private var query: String? {
         guard !search.isEmpty,
-              store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
+            store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
         else { return nil }
         return search
     }
@@ -73,7 +98,8 @@ struct TodoView: View {
     /// A query whose only survivors sit in the collapsed week-old section leaves
     /// the panel a single header row, so the section opens itself.
     private var onlyOlderMatches: Bool {
-        query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty && !visibleOlderDone.isEmpty
+        query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty
+            && !visibleOlderDone.isEmpty
     }
 
     var body: some View {
@@ -160,13 +186,14 @@ struct TodoView: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("listTop")
                             ForEach(visibleSections, id: \.day) { section in
-                                sectionHeader(TodoStore.dayLabel(for: section.day))
+                                sectionHeader(
+                                    TodoStore.dayLabel(for: section.day), showDeleteButton: false)
                                 ForEach(section.items) { item in
                                     row(item)
                                 }
                             }
                             if !visibleRecentDone.isEmpty {
-                                sectionHeader("Completed")
+                                sectionHeader("Completed", showDeleteButton: true)
                                 ForEach(visibleRecentDone) { item in
                                     row(item)
                                 }
@@ -183,29 +210,51 @@ struct TodoView: View {
                                         }
                                     },
                                     label: {
-                                        Button {
-                                            withAnimation(rowAnimation) {
-                                                olderExpanded.toggle()
+                                        HStack {
+                                            Button {
+                                                withAnimation(rowAnimation) {
+                                                    olderExpanded.toggle()
+                                                }
+                                            } label: {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "chevron.right")
+                                                        .font(.caption)
+                                                        .rotationEffect(
+                                                            .degrees(olderExpanded ? 90 : 0))
+                                                    Text(
+                                                        "Completed over a week ago (\(TodoStore.compact(visibleOlder.count)))"
+                                                    )
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .contentShape(Rectangle())
                                             }
-                                        } label: {
-                                            Text(
-                                                "Completed over a week ago (\(TodoStore.compact(visibleOlder.count)))"
+                                            .buttonStyle(.plain)
+                                            // On the Button, which is what VoiceOver
+                                            // focuses — not the Text inside it.
+                                            .accessibilityLabel(
+                                                "Completed over a week ago, \(visibleOlder.count)"
                                             )
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .contentShape(Rectangle())
+                                            Spacer()
+                                            Button {
+                                                withAnimation(rowAnimation) {
+                                                    store.delete(
+                                                        ids: store.olderCompletedItems.map(\.id))
+                                                }
+                                            } label: {
+                                                Image(systemName: "trash")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .padding(.trailing, 2)
                                         }
-                                        .buttonStyle(.plain)
-                                        // On the Button, which is what VoiceOver
-                                        // focuses — not the Text inside it.
-                                        .accessibilityLabel(
-                                            "Completed over a week ago, \(visibleOlder.count)"
-                                        )
                                     }
                                 )
-                                .padding(.horizontal, 12)
-                                .padding(.top, 8)
+                                // Horizontal padding now lives in the style, so
+                                // the rows below keep their own 12 instead of 24.
+                                .disclosureGroupStyle(InlineDisclosureStyle())
                             }
                         }
                     }
@@ -295,12 +344,25 @@ struct TodoView: View {
         scrollTopTick += 1
     }
 
-    private func sectionHeader(_ label: String) -> some View {
+    private func sectionHeader(_ label: String, showDeleteButton: Bool) -> some View {
         HStack {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+            if showDeleteButton {
+                Button {
+                    withAnimation(rowAnimation) {
+                        store.delete(ids: store.recentCompletedItems.map(\.id))
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 2)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)

@@ -296,4 +296,36 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(TodoStore.compact(1_000_000), "1M")
         XCTAssertEqual(TodoStore.compact(2_300_000), "2.3M")
     }
+
+    func test_bulk_delete_removes_only_given_ids() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        let now = Date()
+        let old = Calendar.current.date(byAdding: .day, value: -8, to: now)!
+        store.add("Recent done", updatedAt: now)
+        store.add("Old done", updatedAt: now)
+        store.add("Active", updatedAt: now)
+        store.toggle(store.items[0].id, updatedAt: now)
+        store.toggle(store.items[1].id, updatedAt: old)
+        let recentID = store.items[0].id
+
+        store.delete(ids: [recentID])
+
+        // Only the named id goes: the other completed bucket and the active
+        // item are untouched.
+        XCTAssertEqual(Set(store.items.map(\.id)), Set([store.items[0].id, store.items[1].id]))
+        XCTAssertEqual(store.recentCompletedItems.map(\.title), [])
+        XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Old done"])
+        XCTAssertTrue(store.activeByDay.flatMap(\.items).map(\.title) == ["Active"])
+
+        // One write, so it must land in one pass.
+        let reloaded = TodoStore(fileURL: url)
+        XCTAssertEqual(reloaded.items.count, 2)
+        XCTAssertFalse(reloaded.items.contains { $0.id == recentID })
+
+        // No ids is a no-op, not an empty write.
+        store.delete(ids: [])
+        XCTAssertEqual(store.items.count, 2)
+    }
 }

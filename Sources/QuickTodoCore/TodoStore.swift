@@ -143,6 +143,14 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
+    /// Bulk remove in a single write — looping `delete(_:)` would save per item.
+    public func delete(ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        let doomed = Set(ids)
+        items.removeAll { doomed.contains($0.id) }
+        save()
+    }
+
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return } // first launch
         do {
