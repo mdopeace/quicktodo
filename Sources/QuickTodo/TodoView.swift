@@ -95,6 +95,11 @@ struct TodoView: View {
     private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
+    /// Bulk delete clears a whole bucket, but the headers render a filtered
+    /// count — so while a search is live the button would announce "delete 1"
+    /// and remove 60. Hide it instead: search is for finding, not clearing.
+    private var canBulkDelete: Bool { query == nil }
+
     /// A query whose only survivors sit in the collapsed week-old section leaves
     /// the panel a single header row, so the section opens itself.
     private var onlyOlderMatches: Bool {
@@ -186,14 +191,15 @@ struct TodoView: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("listTop")
                             ForEach(visibleSections, id: \.day) { section in
-                                sectionHeader(
-                                    TodoStore.dayLabel(for: section.day), showDeleteButton: false)
+                                sectionHeader(TodoStore.dayLabel(for: section.day), ids: nil)
                                 ForEach(section.items) { item in
                                     row(item)
                                 }
                             }
                             if !visibleRecentDone.isEmpty {
-                                sectionHeader("Completed", showDeleteButton: true)
+                                sectionHeader(
+                                    "Completed",
+                                    ids: canBulkDelete ? store.recentCompletedItems.map(\.id) : [])
                                 ForEach(visibleRecentDone) { item in
                                     row(item)
                                 }
@@ -237,20 +243,22 @@ struct TodoView: View {
                                                 "Completed over a week ago, \(visibleOlder.count)"
                                             )
                                             Spacer()
-                                            Button {
-                                                withAnimation(rowAnimation) {
-                                                    store.delete(
-                                                        ids: store.olderCompletedItems.map(\.id))
+                                            if canBulkDelete {
+                                                Button {
+                                                    withAnimation(rowAnimation) {
+                                                        store.delete(
+                                                            ids: store.olderCompletedItems.map(\.id))
+                                                    }
+                                                } label: {
+                                                    Image(systemName: "trash")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
                                                 }
-                                            } label: {
-                                                Image(systemName: "trash")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
+                                                .buttonStyle(.plain)
+                                                .accessibilityLabel("Delete all completed over a week ago")
+                                                .help("Delete all completed over a week ago")
+                                                .padding(.trailing, 2)
                                             }
-                                            .buttonStyle(.plain)
-                                            .accessibilityLabel("Delete all completed over a week ago")
-                                            .help("Delete all completed over a week ago")
-                                            .padding(.trailing, 2)
                                         }
                                     }
                                 )
@@ -346,16 +354,19 @@ struct TodoView: View {
         scrollTopTick += 1
     }
 
-    private func sectionHeader(_ label: String, showDeleteButton: Bool) -> some View {
+    /// `ids` drives the button: nil for day headers, the bucket's ids for the
+    /// completed ones, and an empty array while a search is live (see
+    /// `canBulkDelete`). One argument instead of a flag plus a hidden branch.
+    private func sectionHeader(_ label: String, ids: [UUID]?) -> some View {
         HStack {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            if showDeleteButton {
+            if let ids, !ids.isEmpty {
                 Button {
                     withAnimation(rowAnimation) {
-                        store.delete(ids: store.recentCompletedItems.map(\.id))
+                        store.delete(ids: ids)
                     }
                 } label: {
                     Image(systemName: "trash")
