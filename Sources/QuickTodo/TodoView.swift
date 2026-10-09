@@ -30,6 +30,24 @@ private struct ProgressTracker {
     let spoken: String
 }
 
+/// `label` doubles as the tooltip and the VoiceOver name.
+private struct FooterLink: View {
+    let systemName: String
+    let label: String
+    let url: String
+
+    var body: some View {
+        Link(destination: URL(string: url)!) {
+            Image(systemName: systemName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityLabel(label)
+        .help(label)
+        .buttonStyle(.plain)
+    }
+}
+
 /// A completed section that can be bulk-cleared.
 private enum BulkTarget {
     case recent, older
@@ -321,14 +339,16 @@ struct TodoView: View {
                 .padding(.horizontal, 12)
 
             HStack(spacing: 8) {
-                Link(destination: URL(string: "https://buymeacoffee.com/mdopeace")!) {
-                    Image(systemName: "heart")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("Buy me a coffee")
-                .help("Buy me a coffee")
-                .buttonStyle(.plain)
+                FooterLink(
+                    systemName: "lightbulb",
+                    label: "See all features",
+                    url: "https://github.com/mdopeace/quicktodo#features"
+                )
+                FooterLink(
+                    systemName: "heart",
+                    label: "Buy me a coffee",
+                    url: "https://buymeacoffee.com/mdopeace"
+                )
                 HStack(spacing: 8) {
                     ZStack(alignment: .leading) {
                         Capsule()
