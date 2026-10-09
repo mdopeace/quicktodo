@@ -333,4 +333,124 @@ final class TodoStoreTests: XCTestCase {
         store.delete(ids: [])
         XCTAssertEqual(store.items.count, 2)
     }
+
+    // MARK: - Manual reorder
+
+    /// Same-day todos stamped noon so assertions can't drift across midnight.
+    private func storeWithThreeToday() -> (TodoStore, URL, [UUID]) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        let noon = Calendar.current.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        store.add("A", createdAt: noon, updatedAt: noon)
+        store.add("B", createdAt: noon, updatedAt: noon.addingTimeInterval(60))
+        store.add("C", createdAt: noon, updatedAt: noon.addingTimeInterval(120))
+        return (store, url, store.items.map(\.id))
+    }
+
+    func test_unreordered_list_still_falls_back_to_recency() throws {
+        let (store, _, _) = storeWithThreeToday()
+        XCTAssertNil(store.items[0].order)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["C", "B", "A"])
+    }
+
+    func test_move_beats_recency_and_persists() throws {
+        let (store, url, ids) = storeWithThreeToday()
+        // A is the oldest, so recency puts it last; a drag to the top wins.
+        store.move(ids[0], to: 0)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["A", "C", "B"])
+        // Renumbered densely, not left as a single 0.
+        XCTAssertEqual(store.items.map(\.order), [0, 2, 1])
+
+        let reloaded = TodoStore(fileURL: url)
+        XCTAssertEqual(reloaded.activeByDay.flatMap(\.items).map(\.title), ["A", "C", "B"])
+    }
+
+    func test_move_down_indexes_after_lifting_out() throws {
+        let (store, _, ids) = storeWithThreeToday()
+        // Visual order is C, B, A. Index 1 is B, but lifting A out leaves C, B.
+        store.move(ids[0], to: 1)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["C", "A", "B"])
+    }
+
+    func test_move_out_of_range_clamps() throws {
+        let (store, _, ids) = storeWithThreeToday()
+        // `to` is a slot in the section after C is lifted out, so 99 clamps to 2.
+        store.move(ids[2], to: 99)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["B", "A", "C"])
+
+        // Now C sits last, and -5 clamps to 0, the top.
+        store.move(ids[2], to: -5)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["C", "B", "A"])
+    }
+
+    func test_move_to_current_position_is_not_a_write() throws {
+        let (store, _, ids) = storeWithThreeToday()
+        store.move(ids[0], to: 2)  // A already sits last
+        XCTAssertTrue(store.items.allSatisfy { $0.order == nil })
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["C", "B", "A"])
+    }
+
+    func test_new_todo_lands_above_a_reordered_section() throws {
+        let (store, _, ids) = storeWithThreeToday()
+        store.move(ids[0], to: 0)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["A", "C", "B"])
+
+        let noon = Calendar.current.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        store.add("Fresh", createdAt: noon, updatedAt: noon.addingTimeInterval(180))
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["Fresh", "A", "C", "B"])
+    }
+
+    func test_toggle_clears_manual_order() throws {
+        let (store, _, ids) = storeWithThreeToday()
+        store.move(ids[0], to: 0)
+        XCTAssertEqual(store.items[0].order, 0)
+
+        store.toggle(ids[0], updatedAt: Date())
+        XCTAssertNil(store.items[0].order)
+        // Untoggling returns it to the top of Today, as recency already did.
+        store.toggle(ids[0], updatedAt: Date().addingTimeInterval(60))
+        XCTAssertFalse(store.items[0].isDone)
+        XCTAssertTrue(
+            store.activeByDay.flatMap(\.items).first.map(\.id) == ids[0],
+            "untoggled item should return to the top of its day")
+    }
+
+    func test_move_ignores_done_items_and_other_days() throws {
+        let cal = Calendar.current
+        let noon = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        let yesterday = cal.date(byAdding: .day, value: -1, to: noon)!
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Today 1", createdAt: noon, updatedAt: noon)
+        store.add("Today 2", createdAt: noon, updatedAt: noon.addingTimeInterval(60))
+        store.add("Yesterday", createdAt: yesterday, updatedAt: yesterday)
+        store.toggle(store.items[0].id, updatedAt: noon)
+
+        // A completed row has no day section, so it never moves.
+        store.move(store.items[0].id, to: 0)
+        XCTAssertNil(store.items[0].order)
+        XCTAssertEqual(
+            store.activeByDay.first { $0.day == cal.startOfDay(for: noon) }?.items.map(\.title),
+            ["Today 2"])
+
+        // Reordering Today leaves Yesterday's section untouched.
+        store.move(store.items[1].id, to: 0)
+        XCTAssertEqual(
+            store.activeByDay.first { $0.day == cal.startOfDay(for: noon) }?.items.map(\.title),
+            ["Today 2"])
+        let otherDay = store.activeByDay.first { $0.day == cal.startOfDay(for: yesterday) }
+        XCTAssertEqual(otherDay?.items.map(\.title), ["Yesterday"])
+    }
+
+    func test_legacy_json_without_order_decodes_as_unreordered() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        try #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":false}]"#
+            .write(to: url, atomically: true, encoding: .utf8)
+        let store = TodoStore(fileURL: url)
+        XCTAssertNil(store.items[0].order)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["Legacy"])
+    }
 }

@@ -55,6 +55,7 @@ open dist/quicktodo.app
 - Live search from the same input (3+ characters filters after a 200ms debounce; no match falls back to the full list)
 - Progress tracker (completed/total)
 - Day-grouped list with "Completed" section
+- Drag a todo to reorder it within its day (also: VoiceOver/keyboard "Move up"/"Move down" actions)
 - Global hotkey (⌘⌥T) to open menu
 - Launch at login support
 - Auto-updates via GitHub API (automatic check on launch/menu-open; when update available, footer shows ⬇️ to download & install in-place)
