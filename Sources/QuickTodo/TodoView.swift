@@ -487,8 +487,12 @@ struct TodoView: View {
                         return true
                     }
                     // Drag is pointer-only; this is the keyboard/VoiceOver route.
-                    .accessibilityAction(named: Text("Move up")) { nudge(item.id, by: -1, in: section) }
-                    .accessibilityAction(named: Text("Move down")) { nudge(item.id, by: 1, in: section) }
+                    .accessibilityAction(named: Text("Move up")) {
+                        nudge(item.id, by: -1, in: section)
+                    }
+                    .accessibilityAction(named: Text("Move down")) {
+                        nudge(item.id, by: 1, in: section)
+                    }
             }
         }
     }
