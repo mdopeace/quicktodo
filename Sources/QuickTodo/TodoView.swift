@@ -3,23 +3,17 @@ import SwiftUI
 
 private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 
-/// Replaces `DisclosureGroup`'s built-in layout so the header lines up with
-/// `sectionHeader` and the content rows sit at the same 12pt inset as every
-/// other row. The default style reserves ~4pt of trailing space on the label
-/// row that Apple documents no value for, and the group's own horizontal
-/// padding stacked on the rows' padding (24pt total).
-///
-/// Draws no disclosure control of its own — `label` supplies the chevron, the
-/// toggle, and the delete button.
+/// Aligns the header with `sectionHeader` and rows at the standard 12pt inset;
+/// the built-in style stacks its own padding on top (24pt). Draws no chevron —
+/// `label` supplies it.
 private struct InlineDisclosureStyle: DisclosureGroupStyle {
     func makeBody(configuration: Configuration) -> some View {
         VStack(spacing: 0) {
             configuration.label
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
-                // Collapsed, the header is the last row before the footer, so it
-                // gets the same 8pt of trailing air the top padding gives the
-                // row above. Expanded, 8pt would separate it from its own rows.
+                // Collapsed, the header needs the same trailing air as its top padding;
+                // expanded, that would separate it from its own rows.
                 .padding(.bottom, configuration.isExpanded ? 2 : 8)
             if configuration.isExpanded {
                 configuration.content
@@ -40,8 +34,7 @@ private struct ProgressTracker {
 private enum BulkTarget {
     case recent, older
 
-    /// Short — read aloud by VoiceOver and shown in the tooltip. The header
-    /// next to the button already names the section.
+    /// Short — VoiceOver text and tooltip. The header already names the section.
     var spoken: String {
         switch self {
         case .recent: "completed"
@@ -71,20 +64,17 @@ struct TodoView: View {
         let value = total > 0 ? Double(done) / Double(total) : 0
         return ProgressTracker(
             value: value,
-            // n/n stays raw: it's read against the bar, and compacting rounds
-            // 1199/1200 and 1200/1200 onto the same "1.2K/1.2K".
+            // n/n stays raw; compacting rounds 1199/1200 and 1200/1200 to the same "1.2K".
             text: "\(done)/\(total) (\(TodoStore.compact(older)))",
-            // "1.5K" is announced literally, so spell the counts out. Drop the
-            // trailing clause when empty.
+            // VoiceOver reads "1.5K" literally, so spell the counts out.
             spoken: older > 0
                 ? "\(done) of \(total) done, \(older) completed over a week ago"
                 : "\(done) of \(total) done"
         )
     }
 
-    /// Debounced view of `draft`. The zero-match fallback is resolved here, per
-    /// render, so deleting the last match mid-search degrades to the default list
-    /// instead of leaving an empty menu.
+    /// Debounced view of `draft`. Zero matches resolves to the full list here, per
+    /// render, so deleting the last match mid-search never empties the menu.
     private var query: String? {
         guard !search.isEmpty,
             store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
@@ -97,9 +87,8 @@ struct TodoView: View {
         return items.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
-    // Each property resolves `query` once. Reading it per section re-scans every
-    // item (S+5)x per body pass, and body re-runs on every keystroke because
-    // `draft` is bound directly in it.
+    // Resolve `query` once per property; reading it per section re-scans every
+    // item, and body re-runs on each keystroke.
     private var visibleSections: [(day: Date, items: [TodoItem])] {
         let q = query
         return store.activeByDay.compactMap { section -> (day: Date, items: [TodoItem])? in
@@ -111,8 +100,8 @@ struct TodoView: View {
     private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
-    /// Delete clears the whole bucket, but the header count is filtered —
-    /// so hide the button while searching rather than let "delete 1" remove 60.
+    /// Delete clears the whole bucket but the header count is filtered, so hide
+    /// the button while searching rather than let "delete 1" remove 60.
     private var canBulkDelete: Bool { query == nil }
 
     private func ids(for target: BulkTarget) -> [UUID] {
@@ -122,8 +111,8 @@ struct TodoView: View {
         }
     }
 
-    /// Idle trash, or confirm + cancel once opened. Icons are narrow enough to
-    /// share the header row; a text prompt would wrap the title.
+    /// Idle trash, or confirm + cancel once opened. Icons fit the header row; text
+    /// would wrap the title.
     @ViewBuilder
     private func bulkControl(_ target: BulkTarget) -> some View {
         if bulkTarget == target {
@@ -138,7 +127,7 @@ struct TodoView: View {
                     Image(systemName: "checkmark.circle")
                 }
                 .buttonStyle(.plain)
-                // Icons alone don't convey how much is at stake.
+                // The count is the whole point; a bare icon doesn't say how much is at stake.
                 .accessibilityLabel("Delete \(ids.count) \(target.spoken)")
                 .help("Delete \(ids.count) \(target.spoken)")
                 Button {
@@ -163,8 +152,8 @@ struct TodoView: View {
         }
     }
 
-    /// A query whose only survivors sit in the collapsed week-old section leaves
-    /// the panel a single header row, so the section opens itself.
+    /// Matches land only in the collapsed week-old section, so open it — otherwise
+    /// the panel is a single header row.
     private var onlyOlderMatches: Bool {
         query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty
             && !visibleOlderDone.isEmpty
@@ -192,10 +181,8 @@ struct TodoView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
-                    // Trailing overlay, not prompt text: keeps the look of a
-                    // placeholder hint while staying right-aligned for any
-                    // version length, and hides while typing so it never sits
-                    // under real input.
+// Overlay, not prompt text: stays right-aligned for any version
+                        // length and hides while typing.
                     .overlay(alignment: .trailing) {
                         Text("v\(appVersion)")
                             .font(.caption2)
@@ -203,8 +190,7 @@ struct TodoView: View {
                             .padding(.trailing, 8)
                             .opacity(draft.isEmpty ? 1 : 0)
                             .allowsHitTesting(false)
-                            // Opacity alone leaves this in the a11y tree, so it
-                            // would still be read out while invisible.
+                            // Opacity alone leaves this in the a11y tree.
                             .accessibilityHidden(true)
                     }
                 Button(action: submit) {
@@ -219,9 +205,9 @@ struct TodoView: View {
                 inputFocused = true
             }
             .task(id: draft) {
-                // Each keystroke changes the id, which cancels the in-flight
-                // sleep, so only the final one survives to write `search`. The
-                // guard is load-bearing: `try?` swallows the CancellationError.
+                // Each keystroke changes the id, cancelling the in-flight sleep, so only
+                // the last one writes `search`. Guard is load-bearing: `try?`
+                // swallows the CancellationError.
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
                 search = TodoStore.searchQuery(draft) ?? ""
@@ -240,8 +226,8 @@ struct TodoView: View {
             .onChange(of: store.items) { newItems in
                 let currentIDs = Set(newItems.map(\.id))
                 expandedItems = expandedItems.intersection(currentIDs)
-                // Emptying the section unmounts its header but not this state,
-                // so the prompt would re-arm when the section returns.
+                // Emptying the section unmounts its header but not this state, so the
+                // prompt would re-arm when the section returns.
                 if let bulkTarget, ids(for: bulkTarget).isEmpty { self.bulkTarget = nil }
             }
 
@@ -303,8 +289,7 @@ struct TodoView: View {
                                                 .contentShape(Rectangle())
                                             }
                                             .buttonStyle(.plain)
-                                            // On the Button, which is what VoiceOver
-                                            // focuses — not the Text inside it.
+                                            // On the Button, which is what VoiceOver focuses.
                                             .accessibilityLabel(
                                                 "Completed over a week ago, \(visibleOlder.count)"
                                             )
@@ -317,8 +302,7 @@ struct TodoView: View {
                                         .buttonStyle(.plain)
                                     }
                                 )
-                                // Horizontal padding now lives in the style, so
-                                // the rows below keep their own 12 instead of 24.
+                                // Padding now lives in the style, so rows keep their own 12.
                                 .disclosureGroupStyle(InlineDisclosureStyle())
                             }
                         }
@@ -384,11 +368,11 @@ struct TodoView: View {
             .padding(.vertical, 10)
         }
         .frame(width: MenuMetrics.width)  // height hugs content; AppDelegate caps it
-        // Filtering changes the list height without touching the store, so the
-        // hosting view has to be told to re-measure.
+        // Filtering changes list height without touching the store, so the hosting
+        // view has to be told to re-measure.
         .onChange(of: search) { _ in
-            // Search hides the control but leaves bulkTarget set, so
-            // clearing it would re-arm the prompt on its own.
+            // Search hides the control but leaves bulkTarget set, so clearing it here
+            // would re-arm the prompt on its own.
             bulkTarget = nil
             if onlyOlderMatches {
                 withAnimation(rowAnimation) { olderExpanded = true }
@@ -398,12 +382,11 @@ struct TodoView: View {
     }
 
     private func submit() {
-        // Capture + clear first: Return can reach both TextField and Button;
-        // the second delivery then sees an empty draft and is ignored.
+        // Capture + clear first: Return reaches both the TextField and the Button, so
+        // the second delivery sees an empty draft and is ignored.
         let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
-        // Clear the filter too: waiting out the debounce would leave the old
-        // filtered rows on screen immediately after the item is added.
+        // Clear the filter too, or the debounce leaves the old rows on screen.
         search = ""
         guard !title.isEmpty else { return }
         withAnimation(rowAnimation) {
@@ -413,7 +396,7 @@ struct TodoView: View {
     }
 
     /// `bulk` adds the delete control; nil for day headers. Passing the target
-    /// rather than a pre-filtered value keeps the label and action together.
+    /// rather than a pre-filtered value keeps label and action together.
     private func sectionHeader(_ label: String, bulk: BulkTarget?) -> some View {
         HStack {
             Text(label)
@@ -476,8 +459,8 @@ struct TodoView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
 
-        // Only done rows get a createdAt tooltip; an empty help would still be
-        // read out and inherit onto the row's child buttons.
+        // Only done rows get a createdAt tooltip; an empty help would still be read
+        // out and inherit onto the row's child buttons.
         return Group {
             if item.isDone {
                 content.help("Created: \(TodoStore.dayLabel(for: item.createdAt))")

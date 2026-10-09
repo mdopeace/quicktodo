@@ -1,8 +1,6 @@
 import Foundation
 
-/// Every distinct way an install can fail. These stay separate so the UI can
-/// report which check actually broke — one opaque message is what made this flow
-/// undebuggable.
+/// One case per failed check, so the UI can say which one broke.
 public enum InstallError: Error, Equatable {
     case extractionFailed(String)
     case noAppInArchive
@@ -37,18 +35,18 @@ public enum InstallError: Error, Equatable {
 
 public enum AppInstaller {
 
-    /// Replace `liveBundle` with the app inside `zipURL`.
-    ///
-    /// The archive is extracted into a clean staging directory and *that* copy is
-    /// validated, so a bad or mismatched download can never damage the running
-    /// app. Replacing the live bundle is a pair of renames, and the original is
-    /// restored if the second one fails.
-    ///
-    /// - Returns: the URL of the installed bundle (same path as `liveBundle`).
     /// Prefix of the staging directory an install extracts into.
     private static let stagePrefix = ".quicktodo-stage-"
     /// Prefix of the directory the outgoing bundle is parked in during the swap.
     private static let backupPrefix = ".quicktodo-previous-"
+
+    /// Replace `liveBundle` with the app inside `zipURL`.
+    ///
+    /// Validates a staged copy before touching the live bundle, so a bad
+    /// download can't damage the running app. The swap is two renames; the
+    /// original is restored if the second fails.
+    ///
+    /// - Returns: the URL of the installed bundle (same path as `liveBundle`).
 
     @discardableResult
     public static func install(
@@ -71,9 +69,8 @@ public enum AppInstaller {
         }
         defer { try? fm.removeItem(at: stage) }
 
-        // 1. Extract into the empty staging dir. Extracting over the live bundle
-        //    would merge into it, and files dropped by the new version would
-        //    survive and invalidate its code signature.
+        // 1. Extract into the empty staging dir. Over the live bundle it would merge
+        //    and leave the new version's dropped files behind, breaking signing.
         do {
             _ = try run("/usr/bin/ditto", ["-x", "-k", zipURL.path, stage.path])
         } catch {
@@ -91,8 +88,7 @@ public enum AppInstaller {
         // Best effort: strip quarantine before it becomes the live bundle.
         _ = try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path])
 
-        // 3. Swap. Moving the running bundle aside is safe — the old inode stays
-        //    alive until this process exits.
+        // 3. Swap. Safe to move the running bundle aside; its inode lives until we exit.
         let hadPrevious = fm.fileExists(atPath: liveBundle.path)
         if hadPrevious {
             do {
@@ -116,11 +112,8 @@ public enum AppInstaller {
 
     // MARK: - Validation
 
-    /// Cleans up after an install that was killed part-way through.
-    ///
-    /// Replacing the bundle is two renames, so a crash or ⌘Q between them can
-    /// leave the app missing with the previous version parked in a backup. Put
-    /// that back before doing anything else, then drop what is left over.
+    /// Restores a bundle parked by an install that died between its two renames,
+    /// then sweeps leftovers.
     private static func recoverInterruptedInstall(in parent: URL, liveBundle: URL) {
         let fm = FileManager.default
         guard let names = try? fm.contentsOfDirectory(atPath: parent.path) else { return }
@@ -136,11 +129,8 @@ public enum AppInstaller {
         }
     }
 
-    /// The bundle identifier the incoming app has to match.
-    ///
-    /// Fails closed: if the bundle being replaced is present but unreadable
-    /// there is no trustworthy identity to compare against, so refuse the
-    /// install rather than accept whatever the archive contained.
+    /// The bundle id the incoming app must match. Throws if the live bundle is
+    /// present but unreadable — no trustworthy identity to compare against.
     private static func identity(of liveBundle: URL) throws -> String {
         guard FileManager.default.fileExists(atPath: liveBundle.path) else {
             return Bundle.main.bundleIdentifier ?? ""
@@ -205,16 +195,15 @@ public enum AppInstaller {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = args
-        // Both streams share one pipe so neither can fill its buffer and wedge
-        // the child while we wait for it to exit.
+        // One shared pipe: two would let a full buffer wedge the child.
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
 
         try process.run()
 
-        // ponytail: output is buffered in memory rather than size-limited; the
-        // tools used here (ditto, codesign, xattr) only write on failure.
+        // ponytail: output buffered in memory, not size-limited; ditto/codesign/xattr
+        // only write on failure. Cap it if a tool ever gets chatty.
         var output = ""
         let drained = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
@@ -229,8 +218,7 @@ public enum AppInstaller {
             finished.signal()
         }
 
-        // A signalled `finished` already implies the process exited, so the
-        // timeout is the only case that still needs a terminate.
+        // A signalled `finished` implies the process exited; only a timeout needs a kill.
         if finished.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
             throw NSError(

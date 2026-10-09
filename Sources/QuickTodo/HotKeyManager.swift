@@ -1,11 +1,11 @@
 import AppKit
 import Carbon
 
-// System-global hotkey via Carbon: needs no Accessibility permission,
-// unlike NSEvent global monitors (which silently die when untrusted).
+// System-global hotkey via Carbon: needs no Accessibility permission, unlike
+// NSEvent global monitors (which silently die when untrusted).
 //
-// Lifetime: AppDelegate owns this for the process lifetime; the Carbon
-// handler holds self unretained, so don't release early or move ownership.
+// Lifetime: AppDelegate owns this for the process lifetime; the Carbon handler
+// holds self unretained, so don't release early or move ownership.
 final class HotKeyManager {
     var onHotKey: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
