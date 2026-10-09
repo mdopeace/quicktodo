@@ -9,8 +9,8 @@ private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 /// row that Apple documents no value for, and the group's own horizontal
 /// padding stacked on the rows' padding (24pt total).
 ///
-/// Draws no disclosure control of its own: `label` supplies the chevron and the
-/// toggle, so there is exactly one thing to click and one VoiceOver stop.
+/// Draws no disclosure control of its own — `label` supplies the chevron, the
+/// toggle, and the delete button.
 private struct InlineDisclosureStyle: DisclosureGroupStyle {
     func makeBody(configuration: Configuration) -> some View {
         VStack(spacing: 0) {
@@ -240,6 +240,9 @@ struct TodoView: View {
             .onChange(of: store.items) { newItems in
                 let currentIDs = Set(newItems.map(\.id))
                 expandedItems = expandedItems.intersection(currentIDs)
+                // Emptying the section unmounts its header but not this state,
+                // so the prompt would re-arm when the section returns.
+                if let bulkTarget, ids(for: bulkTarget).isEmpty { self.bulkTarget = nil }
             }
 
             Divider()
