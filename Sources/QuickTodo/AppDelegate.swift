@@ -6,8 +6,8 @@ import SwiftUI
 
 extension Notification.Name {
     static let quickTodoMenuWillOpen = Notification.Name("quickTodoMenuWillOpen")
-    /// Posted when the list's height changes without the store changing — search
-    /// filtering. $items alone can't drive layout, or the frame goes stale.
+    /// Posted when the list's height changes without a store change (search
+    /// filtering). $items alone can't drive layout, or the frame goes stale.
     static let quickTodoContentHeightChanged = Notification.Name("quickTodoContentHeightChanged")
 }
 
@@ -19,8 +19,8 @@ enum MenuMetrics {
     static let maxHeight: CGFloat = 345
 }
 
-// Menu-anchored presentation: real menu tracking gives the system
-// highlight pill + keeps the menubar visible in fullscreen for free.
+// Menu-anchored presentation: native menu tracking gives the system highlight
+// pill and keeps the menubar visible in fullscreen for free.
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var menu = NSMenu()
@@ -31,8 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = TodoStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory) // menubar-only, no dock icon
-        installMainMenu() // classic entry: no SwiftUI-provided menu, wire Quit ⌘Q ourselves
+        NSApp.setActivationPolicy(.accessory)  // menubar-only, no dock icon
+        installMainMenu()  // classic entry: no SwiftUI-provided menu, wire Quit ⌘Q ourselves
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let icon = NSImage(systemSymbolName: "checklist", accessibilityDescription: "QuickTodo")
@@ -46,13 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item)
         menu.delegate = self
         statusItem.menu = menu
-        layoutMenu() // synchronous initial size; $items replay below is async
+        layoutMenu()  // synchronous initial size; $items replay below is async
         store.$items
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.layoutMenu() }
             .store(in: &cancellables)
-        // Deferred via .receive(on:) so the re-measure lands after the view update
-        // that posted it, not re-entrantly inside it.
+        // Deferred so the re-measure lands after the view update that posted it.
         NotificationCenter.default.publisher(for: .quickTodoContentHeightChanged)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.layoutMenu() }
@@ -62,15 +61,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotKeys.register()
 
         #if !DEBUG
-        registerLaunchAtLogin()
+            registerLaunchAtLogin()
         #endif
 
         // Start auto-update check on launch (background, non-blocking)
         Updater.shared.checkOnLaunch()
     }
 
-    // Hotkey is open-only (Spotlight-style): closing stays on
-    // Escape / click-outside via native menu tracking.
+    // Hotkey opens only (Spotlight-style); Escape / click-outside still closes.
     @objc func openMenu() {
         if !menuOpen {
             statusItem.button?.performClick(nil)
@@ -79,27 +77,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menuOpen = true
-        // Post before measuring: the handler clears the search filter, and sizing
-        // first would clamp the frame to the previous session's filtered list.
+        // Post before measuring: the handler clears the filter, so sizing first would
+        // clamp the frame to the previous session's filtered list.
         NotificationCenter.default.post(name: .quickTodoMenuWillOpen, object: nil)
-        layoutMenu() // guarantee size before showing
+        layoutMenu()  // guarantee size before showing
 
         // Check for updates on menu open (debounced: max once per 4h)
         Updater.shared.checkOnMenuOpen()
     }
     func menuDidClose(_ menu: NSMenu) { menuOpen = false }
 
-    // Minimum main menu: with no SwiftUI lifecycle nothing installs the
-    // standard app menu, so route Quit ⌘Q ourselves (accessory policy keeps
-    // the menu bar hidden; this only restores the key equivalent).
-    // Note: .keyboardShortcut on the Quit button is NOT a substitute — key
-    // events during menu tracking are matched against menus, never reach
-    // the hosted view (verified: shortcut variant never fired).
+    // Minimal main menu. No SwiftUI lifecycle installs one, so wire Quit ⌘Q here.
+    // .keyboardShortcut on a button is not a substitute: menu tracking consumes
+    // key events before they reach the hosted view.
     private func installMainMenu() {
         let mainMenu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Quit QuickTodo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(
+            withTitle: "Quit QuickTodo", action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q")
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
         NSApp.mainMenu = mainMenu
@@ -115,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // Hug content: measure the SwiftUI ideal height so short lists leave no void.
+    // Hug content: use the SwiftUI ideal height so short lists leave no void.
     private func layoutMenu() {
         host.frame = NSRect(x: 0, y: 0, width: MenuMetrics.width, height: 1000)
         host.layoutSubtreeIfNeeded()

@@ -1,8 +1,9 @@
 import XCTest
+
 @testable import QuickTodoCore
 
-/// End-to-end coverage for the update install path: a real signed bundle is
-/// zipped, then installed over an existing install exactly as the app does it.
+/// End-to-end for the install path: a real signed bundle is zipped, then
+/// installed over an existing install exactly as the app does it.
 final class AppInstallerTests: XCTestCase {
     private var root: URL!
 
@@ -33,9 +34,8 @@ final class AppInstallerTests: XCTestCase {
         XCTAssertEqual(installed, live)
         XCTAssertEqual(try version(of: live), "1.1.0")
 
-        // The update replaces the bundle rather than merging into it. A file the
-        // new version dropped must not survive — it would invalidate the
-        // signature of the freshly installed app.
+        // The update replaces the bundle rather than merging into it. A file the new
+        // version dropped must not survive — it would break the fresh signature.
         let stray = live.appendingPathComponent("Contents/Resources/LegacyOnly.txt")
         XCTAssertFalse(FileManager.default.fileExists(atPath: stray.path))
         XCTAssertNoThrow(try codesignVerify(live))
@@ -59,7 +59,7 @@ final class AppInstallerTests: XCTestCase {
     func test_version_mismatch_reports_both_versions() throws {
         let live = root.appendingPathComponent("Tool.app")
         try makeBundle(at: live, version: "1.0.0")
-        // The release shipped a bundle that does not match its own tag.
+        // Release shipped a bundle that doesn't match its own tag.
         let archive = try zip(
             try makeBundle(at: root.appendingPathComponent("incoming/Tool.app"), version: "1.0.0"),
             at: root.appendingPathComponent("incoming")
@@ -80,7 +80,8 @@ final class AppInstallerTests: XCTestCase {
     func test_missing_version_stamp_is_reported_as_unknown() throws {
         let live = root.appendingPathComponent("Tool.app")
         try makeBundle(at: live, version: "1.0.0")
-        let incoming = try makeBundle(at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
+        let incoming = try makeBundle(
+            at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
         try removeVersionStamp(from: incoming)
         try codesign(incoming)
         let archive = try zip(incoming, at: root.appendingPathComponent("incoming"))
@@ -157,8 +158,9 @@ final class AppInstallerTests: XCTestCase {
     func test_bundle_with_a_broken_signature_is_rejected() throws {
         let live = root.appendingPathComponent("Tool.app")
         try makeBundle(at: live, version: "1.0.0")
-        let incoming = try makeBundle(at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
-        // Tamper after signing so the seal no longer matches.
+        let incoming = try makeBundle(
+            at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
+        // Tamper after signing so the seal breaks.
         try "tampered".write(
             to: incoming.appendingPathComponent("Contents/Resources/tamper.txt"),
             atomically: true, encoding: .utf8
@@ -186,10 +188,11 @@ final class AppInstallerTests: XCTestCase {
 
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: parent.path)
         defer {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parent.path)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: parent.path)
         }
 
-        // Running as root would bypass the permission bits entirely.
+        // Root bypasses the permission bits.
         try XCTSkipIf(getuid() == 0, "permission bits do not apply to root")
 
         XCTAssertThrowsError(
@@ -208,8 +211,8 @@ final class AppInstallerTests: XCTestCase {
     func test_recovers_an_app_left_missing_by_an_interrupted_install() throws {
         let parent = root.appendingPathComponent("Applications", isDirectory: true)
         let live = parent.appendingPathComponent("Tool.app")
-        // A previous install died between its two renames: the app is gone and
-        // the last working version is still parked in its backup directory.
+        // Previous install died between its two renames: the app is gone, the last
+        // working version parked in its backup.
         try makeBundle(
             at: parent.appendingPathComponent(".quicktodo-previous-crashed"),
             version: "1.0.0"
@@ -247,8 +250,8 @@ final class AppInstallerTests: XCTestCase {
 
     func test_unreadable_installed_bundle_is_rejected_rather_than_trusted() throws {
         let live = root.appendingPathComponent("Tool.app")
-        // A .app directory with no Info.plist cannot be identified, so there is
-        // nothing to check the incoming bundle against.
+        // A .app with no Info.plist can't be identified, so there's nothing to check
+        // the incoming bundle against.
         try FileManager.default.createDirectory(at: live, withIntermediateDirectories: true)
         let archive = try zip(
             try makeBundle(at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0"),
@@ -280,14 +283,16 @@ final class AppInstallerTests: XCTestCase {
 
     private func removeVersionStamp(from app: URL) throws {
         let url = app.appendingPathComponent("Contents/Info.plist")
-        var info = try PropertyListSerialization
+        var info =
+            try PropertyListSerialization
             .propertyList(from: Data(contentsOf: url), format: nil) as! [String: Any]
         info.removeValue(forKey: "CFBundleShortVersionString")
-        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: url)
     }
 
-    /// Any staging or backup dirs the installer should have cleaned up.
+    /// Any staging or backup dirs left behind.
     private func leftovers(in dir: URL? = nil) throws -> [String] {
         let names = try FileManager.default
             .contentsOfDirectory(atPath: (dir ?? root).path)
@@ -318,7 +323,8 @@ final class AppInstallerTests: XCTestCase {
             "CFBundleShortVersionString": version,
             "CFBundleVersion": version,
         ]
-        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: contents.appendingPathComponent("Info.plist"))
 
         let executable = contents.appendingPathComponent("MacOS/Tool")
@@ -337,10 +343,11 @@ final class AppInstallerTests: XCTestCase {
     }
 
     private func zip(_ bundle: URL, at destination: URL) throws -> URL {
-        try zipDirectory(bundle, at: destination.appendingPathComponent("\(bundle.lastPathComponent).zip"))
+        try zipDirectory(
+            bundle, at: destination.appendingPathComponent("\(bundle.lastPathComponent).zip"))
     }
 
-    /// Mirrors package.sh: `ditto -c -k --keepParent`.
+    /// Mirrors package.sh's `ditto -c -k --keepParent`.
     private func zipDirectory(_ dir: URL, at archive: URL) throws -> URL {
         try run("/usr/bin/ditto", ["-c", "-k", "--keepParent", dir.path, archive.path])
         return archive
@@ -369,7 +376,10 @@ final class AppInstallerTests: XCTestCase {
         guard process.terminationStatus == 0 else {
             throw NSError(
                 domain: "AppInstallerTests", code: Int(process.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: "\(URL(fileURLWithPath: tool).lastPathComponent): \(output)"]
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "\(URL(fileURLWithPath: tool).lastPathComponent): \(output)"
+                ]
             )
         }
         return output

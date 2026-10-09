@@ -1,11 +1,11 @@
 import AppKit
 import Carbon
 
-// System-global hotkey via Carbon: needs no Accessibility permission,
-// unlike NSEvent global monitors (which silently die when untrusted).
+// System-global hotkey via Carbon: needs no Accessibility permission, unlike
+// NSEvent global monitors (which silently die when untrusted).
 //
-// Lifetime: AppDelegate owns this for the process lifetime; the Carbon
-// handler holds self unretained, so don't release early or move ownership.
+// Lifetime: AppDelegate owns this for the process lifetime; the Carbon handler
+// holds self unretained, so don't release early or move ownership.
 final class HotKeyManager {
     var onHotKey: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
@@ -34,13 +34,15 @@ final class HotKeyManager {
             NSLog("quicktodo: InstallEventHandler failed (%d) — hotkey dead", installStatus)
         }
         // ⌘⌥T
-        let hkID = EventHotKeyID(signature: OSType(0x51545444), id: 1) // 'QTTD'
+        let hkID = EventHotKeyID(signature: OSType(0x5154_5444), id: 1)  // 'QTTD'
         let hotKeyStatus = RegisterEventHotKey(
             UInt32(kVK_ANSI_T), UInt32(cmdKey | optionKey),
             hkID, GetApplicationEventTarget(), 0, &hotKeyRef
         )
         if hotKeyStatus != noErr {
-            NSLog("quicktodo: RegisterEventHotKey failed (%d) — ⌘⌥T may be claimed by another app", hotKeyStatus)
+            NSLog(
+                "quicktodo: RegisterEventHotKey failed (%d) — ⌘⌥T may be claimed by another app",
+                hotKeyStatus)
         }
     }
 

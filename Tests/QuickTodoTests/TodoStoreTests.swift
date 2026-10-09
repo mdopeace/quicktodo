@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import QuickTodoCore
 
 final class TodoStoreTests: XCTestCase {
@@ -16,7 +17,7 @@ final class TodoStoreTests: XCTestCase {
         store.toggle(store.items[0].id)
         XCTAssertTrue(store.items[0].isDone)
 
-        // Persistence: new instance loads from same file
+        // Persistence: a new instance loads from the same file.
         let reloaded = TodoStore(fileURL: url)
         XCTAssertEqual(reloaded.items.count, 1)
         XCTAssertTrue(reloaded.items[0].isDone)
@@ -76,18 +77,19 @@ final class TodoStoreTests: XCTestCase {
         let store = TodoStore(fileURL: url)
         XCTAssertTrue(store.items.isEmpty)
 
-        // Original moved aside, not silently clobbered…
+        // Moved aside, not clobbered…
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
         let dir = url.deletingLastPathComponent()
         let backups = try FileManager.default.contentsOfDirectory(atPath: dir.path)
             .filter { $0.hasPrefix(url.lastPathComponent) && $0.contains("corrupt-") }
         XCTAssertEqual(backups.count, 1)
 
-        // …and a subsequent save writes a fresh valid store, backup untouched.
+        // …and a later save writes a fresh store, backup untouched.
         store.add("Fresh start")
         XCTAssertEqual(store.items.count, 1)
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasPrefix(url.lastPathComponent) && $0.contains("corrupt-") }.count, 1)
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: dir.path)
+                .filter { $0.hasPrefix(url.lastPathComponent) && $0.contains("corrupt-") }.count, 1)
         let reloaded = TodoStore(fileURL: url)
         XCTAssertEqual(reloaded.items.map(\.title), ["Fresh start"])
     }
@@ -101,18 +103,19 @@ final class TodoStoreTests: XCTestCase {
         let legacy = tmp.appendingPathComponent("sandboxed.json")
         try "from-container".write(to: legacy, atomically: true, encoding: .utf8)
 
-        // No local file yet (sandboxed-only install) → seed from the container.
+        // No local file → seed from the container.
         TodoStore.adoptSandboxedStore(into: live, container: legacy)
         XCTAssertEqual(try String(contentsOf: live, encoding: .utf8), "from-container")
 
-        // Both exist and diverged → never overwrite, the user decides.
+        // Both exist → never overwrite, the user decides.
         try "from-app-support".write(to: live, atomically: true, encoding: .utf8)
         TodoStore.adoptSandboxedStore(into: live, container: legacy)
         XCTAssertEqual(try String(contentsOf: live, encoding: .utf8), "from-app-support")
 
-        // Fresh install: no container at all → create nothing, don't fail.
+        // No container at all → create nothing, don't fail.
         let fresh = tmp.appendingPathComponent("fresh.json")
-        TodoStore.adoptSandboxedStore(into: fresh, container: tmp.appendingPathComponent("nope.json"))
+        TodoStore.adoptSandboxedStore(
+            into: fresh, container: tmp.appendingPathComponent("nope.json"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: fresh.path))
     }
 
@@ -144,8 +147,9 @@ final class TodoStoreTests: XCTestCase {
     func test_legacy_json_without_updatedAt_backfills_from_createdAt() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
-        // 721692800 is the JSONDecoder reference-date encoding of 2023-11-14.
-        try #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":true,"createdAt":721692800}]"#
+        // 721692800 is 2023-11-14 in JSONDecoder's reference date.
+        try
+            #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":true,"createdAt":721692800}]"#
             .write(to: url, atomically: true, encoding: .utf8)
         let store = TodoStore(fileURL: url)
         XCTAssertEqual(store.items.count, 1)
@@ -159,8 +163,8 @@ final class TodoStoreTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
         let cal = Calendar.current
-        // Noon keeps the +60s item safely inside today, so the intra-day
-        // ordering assertion can't drift across midnight.
+        // Noon keeps the +60s item inside today, so the intra-day ordering assertion
+        // can't drift across midnight.
         let today = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
         let todayLater = today.addingTimeInterval(60)
         let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
@@ -255,7 +259,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertNil(TodoStore.searchQuery("B"))
         XCTAssertNil(TodoStore.searchQuery("Bu"))
         XCTAssertEqual(TodoStore.searchQuery("Buy"), "Buy")
-        // Returned verbatim; case folding happens at match time, not here.
+        // Verbatim; case folding happens at match time.
         XCTAssertEqual(TodoStore.searchQuery("bUY"), "bUY")
     }
 
@@ -285,9 +289,9 @@ final class TodoStoreTests: XCTestCase {
     }
 
     func test_compact_renders_compact_notation() throws {
-        // Only catches the locale pin being dropped where the system locale
-        // spells large numbers differently (en_IN: 1_000_000 -> "10L").
-        // Locale.current is read-only, so a test can't force the case.
+        // Only catches the locale pin being dropped, where the system locale spells
+        // numbers differently (en_IN: 1_000_000 -> "10L"). Locale.current is
+        // read-only, so a test can't force the case.
         XCTAssertEqual(TodoStore.compact(0), "0")
         XCTAssertEqual(TodoStore.compact(999), "999")
         XCTAssertEqual(TodoStore.compact(1000), "1K")
@@ -313,9 +317,8 @@ final class TodoStoreTests: XCTestCase {
 
         store.delete(ids: [recentID])
 
-        // Only the named id goes: the other completed bucket and the active
-        // item survive. Asserted by title — comparing id sets built from the
-        // post-delete `items` would hold whatever is left either way.
+        // Only the named id goes. Asserted by title: id sets from post-delete `items`
+        // would hold whatever is left either way.
         XCTAssertEqual(store.items.map(\.title), ["Old done", "Active"])
         XCTAssertFalse(store.items.contains { $0.id == recentID })
         XCTAssertEqual(store.recentCompletedItems.map(\.title), [])
