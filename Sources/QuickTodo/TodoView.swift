@@ -3,12 +3,51 @@ import SwiftUI
 
 private let rowAnimation = Animation.spring(response: 0.3, dampingFraction: 0.8)
 
+/// Replaces `DisclosureGroup`'s built-in layout so the header lines up with
+/// `sectionHeader` and the content rows sit at the same 12pt inset as every
+/// other row. The default style reserves ~4pt of trailing space on the label
+/// row that Apple documents no value for, and the group's own horizontal
+/// padding stacked on the rows' padding (24pt total).
+///
+/// Draws no disclosure control of its own — `label` supplies the chevron, the
+/// toggle, and the delete button.
+private struct InlineDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 0) {
+            configuration.label
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                // Collapsed, the header is the last row before the footer, so it
+                // gets the same 8pt of trailing air the top padding gives the
+                // row above. Expanded, 8pt would separate it from its own rows.
+                .padding(.bottom, configuration.isExpanded ? 2 : 8)
+            if configuration.isExpanded {
+                configuration.content
+            }
+        }
+    }
+}
+
 private struct ProgressTracker {
     /// 0...1, drives the bar's fill and the green-at-complete styling.
     let value: Double
     let text: String
     /// Spoken form of `text` for VoiceOver.
     let spoken: String
+}
+
+/// A completed section that can be bulk-cleared.
+private enum BulkTarget {
+    case recent, older
+
+    /// Short — read aloud by VoiceOver and shown in the tooltip. The header
+    /// next to the button already names the section.
+    var spoken: String {
+        switch self {
+        case .recent: "completed"
+        case .older: "older"
+        }
+    }
 }
 
 struct TodoView: View {
@@ -19,6 +58,8 @@ struct TodoView: View {
     @State private var scrollTopTick = 0
     @State private var expandedItems: Set<UUID> = []
     @State private var olderExpanded = false
+    /// Non-nil while a section's delete prompt is open.
+    @State private var bulkTarget: BulkTarget?
     @FocusState private var inputFocused: Bool
 
     /// Bind to a `let` in `body` — reading this inline re-walks the store on
@@ -46,7 +87,7 @@ struct TodoView: View {
     /// instead of leaving an empty menu.
     private var query: String? {
         guard !search.isEmpty,
-              store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
+            store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
         else { return nil }
         return search
     }
@@ -70,10 +111,63 @@ struct TodoView: View {
     private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
+    /// Delete clears the whole bucket, but the header count is filtered —
+    /// so hide the button while searching rather than let "delete 1" remove 60.
+    private var canBulkDelete: Bool { query == nil }
+
+    private func ids(for target: BulkTarget) -> [UUID] {
+        switch target {
+        case .recent: store.recentCompletedItems.map(\.id)
+        case .older: store.olderCompletedItems.map(\.id)
+        }
+    }
+
+    /// Idle trash, or confirm + cancel once opened. Icons are narrow enough to
+    /// share the header row; a text prompt would wrap the title.
+    @ViewBuilder
+    private func bulkControl(_ target: BulkTarget) -> some View {
+        if bulkTarget == target {
+            let ids = ids(for: target)
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(rowAnimation) {
+                        store.delete(ids: ids)
+                        bulkTarget = nil
+                    }
+                } label: {
+                    Image(systemName: "checkmark.circle")
+                }
+                .buttonStyle(.plain)
+                // Icons alone don't convey how much is at stake.
+                .accessibilityLabel("Delete \(ids.count) \(target.spoken)")
+                .help("Delete \(ids.count) \(target.spoken)")
+                Button {
+                    withAnimation(rowAnimation) { bulkTarget = nil }
+                } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel delete")
+                .help("Cancel")
+            }
+        } else {
+            Button {
+                withAnimation(rowAnimation) { bulkTarget = target }
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete all \(target.spoken)")
+            .help("Delete all \(target.spoken)")
+        }
+    }
+
     /// A query whose only survivors sit in the collapsed week-old section leaves
     /// the panel a single header row, so the section opens itself.
     private var onlyOlderMatches: Bool {
-        query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty && !visibleOlderDone.isEmpty
+        query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty
+            && !visibleOlderDone.isEmpty
     }
 
     var body: some View {
@@ -138,12 +232,17 @@ struct TodoView: View {
                 inputFocused = false
                 expandedItems.removeAll()
                 olderExpanded = false
+                // Don't reopen still showing the previous prompt.
+                bulkTarget = nil
                 scrollTopTick += 1
                 DispatchQueue.main.async { inputFocused = true }
             }
             .onChange(of: store.items) { newItems in
                 let currentIDs = Set(newItems.map(\.id))
                 expandedItems = expandedItems.intersection(currentIDs)
+                // Emptying the section unmounts its header but not this state,
+                // so the prompt would re-arm when the section returns.
+                if let bulkTarget, ids(for: bulkTarget).isEmpty { self.bulkTarget = nil }
             }
 
             Divider()
@@ -160,13 +259,13 @@ struct TodoView: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("listTop")
                             ForEach(visibleSections, id: \.day) { section in
-                                sectionHeader(TodoStore.dayLabel(for: section.day))
+                                sectionHeader(TodoStore.dayLabel(for: section.day), bulk: nil)
                                 ForEach(section.items) { item in
                                     row(item)
                                 }
                             }
                             if !visibleRecentDone.isEmpty {
-                                sectionHeader("Completed")
+                                sectionHeader("Completed", bulk: .recent)
                                 ForEach(visibleRecentDone) { item in
                                     row(item)
                                 }
@@ -183,29 +282,44 @@ struct TodoView: View {
                                         }
                                     },
                                     label: {
-                                        Button {
-                                            withAnimation(rowAnimation) {
-                                                olderExpanded.toggle()
+                                        HStack {
+                                            Button {
+                                                withAnimation(rowAnimation) {
+                                                    olderExpanded.toggle()
+                                                }
+                                            } label: {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "chevron.right")
+                                                        .font(.caption)
+                                                        .rotationEffect(
+                                                            .degrees(olderExpanded ? 90 : 0))
+                                                    Text(
+                                                        "Completed over a week ago (\(TodoStore.compact(visibleOlder.count)))"
+                                                    )
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .contentShape(Rectangle())
                                             }
-                                        } label: {
-                                            Text(
-                                                "Completed over a week ago (\(TodoStore.compact(visibleOlder.count)))"
+                                            .buttonStyle(.plain)
+                                            // On the Button, which is what VoiceOver
+                                            // focuses — not the Text inside it.
+                                            .accessibilityLabel(
+                                                "Completed over a week ago, \(visibleOlder.count)"
                                             )
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .contentShape(Rectangle())
+                                            Spacer()
+                                            if canBulkDelete {
+                                                bulkControl(.older)
+                                            }
                                         }
+                                        .font(.caption)
                                         .buttonStyle(.plain)
-                                        // On the Button, which is what VoiceOver
-                                        // focuses — not the Text inside it.
-                                        .accessibilityLabel(
-                                            "Completed over a week ago, \(visibleOlder.count)"
-                                        )
                                     }
                                 )
-                                .padding(.horizontal, 12)
-                                .padding(.top, 8)
+                                // Horizontal padding now lives in the style, so
+                                // the rows below keep their own 12 instead of 24.
+                                .disclosureGroupStyle(InlineDisclosureStyle())
                             }
                         }
                     }
@@ -273,6 +387,9 @@ struct TodoView: View {
         // Filtering changes the list height without touching the store, so the
         // hosting view has to be told to re-measure.
         .onChange(of: search) { _ in
+            // Search hides the control but leaves bulkTarget set, so
+            // clearing it would re-arm the prompt on its own.
+            bulkTarget = nil
             if onlyOlderMatches {
                 withAnimation(rowAnimation) { olderExpanded = true }
             }
@@ -295,13 +412,20 @@ struct TodoView: View {
         scrollTopTick += 1
     }
 
-    private func sectionHeader(_ label: String) -> some View {
+    /// `bulk` adds the delete control; nil for day headers. Passing the target
+    /// rather than a pre-filtered value keeps the label and action together.
+    private func sectionHeader(_ label: String, bulk: BulkTarget?) -> some View {
         HStack {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+            if let bulk, canBulkDelete {
+                bulkControl(bulk)
+            }
         }
+        .font(.caption)
+        .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 2)
