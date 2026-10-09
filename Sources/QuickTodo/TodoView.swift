@@ -247,13 +247,13 @@ struct TodoView: View {
                             ForEach(visibleSections, id: \.day) { section in
                                 sectionHeader(TodoStore.dayLabel(for: section.day), bulk: nil)
                                 ForEach(section.items) { item in
-                                    row(item)
+                                    row(item, in: section.items)
                                 }
                             }
                             if !visibleRecentDone.isEmpty {
                                 sectionHeader("Completed", bulk: .recent)
                                 ForEach(visibleRecentDone) { item in
-                                    row(item)
+                                    row(item, in: visibleRecentDone)
                                 }
                             }
                             // Bound once: every read walks the store and
@@ -264,7 +264,7 @@ struct TodoView: View {
                                     isExpanded: $olderExpanded,
                                     content: {
                                         ForEach(visibleOlder) { item in
-                                            row(item)
+                                            row(item, in: visibleOlder)
                                         }
                                     },
                                     label: {
@@ -414,7 +414,7 @@ struct TodoView: View {
         .padding(.bottom, 2)
     }
 
-    private func row(_ item: TodoItem) -> some View {
+    private func row(_ item: TodoItem, in section: [TodoItem]) -> some View {
         let content = HStack(spacing: 8) {
             Button {
                 withAnimation(rowAnimation) {
@@ -465,9 +465,40 @@ struct TodoView: View {
             if item.isDone {
                 content.help("Created: \(TodoStore.dayLabel(for: item.createdAt))")
             } else {
+                // Reorder controls are active-only: done rows sit in their own
+                // sections, so offering them would be a no-op.
                 content
+                    .draggable(item.id.uuidString)
+                    .dropDestination(for: String.self) { payloads, _ in
+                        // A filtered list would renumber only the visible rows.
+                        guard query == nil,
+                            let raw = payloads.first,
+                            let dragged = UUID(uuidString: raw)
+                        else { return false }
+                        let ids = section.map(\.id)
+                        guard let from = ids.firstIndex(of: dragged),
+                            let at = ids.firstIndex(of: item.id),
+                            from != at
+                        else { return false }
+                        // Downward drops shift one slot, matching move's post-lift indexing.
+                        withAnimation(rowAnimation) {
+                            store.move(dragged, to: from < at ? at - 1 : at)
+                        }
+                        return true
+                    }
+                    // Drag is pointer-only; this is the keyboard/VoiceOver route.
+                    .accessibilityAction(named: Text("Move up")) { nudge(item.id, by: -1, in: section) }
+                    .accessibilityAction(named: Text("Move down")) { nudge(item.id, by: 1, in: section) }
             }
         }
+    }
+
+    private func nudge(_ id: UUID, by step: Int, in section: [TodoItem]) {
+        let ids = section.map(\.id)
+        guard query == nil, let i = ids.firstIndex(of: id) else { return }
+        let j = i + step
+        guard ids.indices.contains(j) else { return }
+        withAnimation(rowAnimation) { store.move(id, to: j) }
     }
 }
 

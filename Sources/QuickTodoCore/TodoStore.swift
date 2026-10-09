@@ -7,9 +7,12 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     public var isDone = false
     public var createdAt = Date()
     public var updatedAt = Date()
+    /// Manual position in its day section; nil = never reordered, so it falls
+    /// back to recency.
+    public var order: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, createdAt, updatedAt
+        case id, title, isDone, createdAt, updatedAt, order
     }
 }
 
@@ -22,20 +25,36 @@ extension TodoItem {
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         // Not Date(): a legacy item must stay in the day it was created.
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        order = try c.decodeIfPresent(Int.self, forKey: .order)
     }
 }
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
-    /// Active, newest day first; newest updatedAt first within a day, ties
-    /// broken by newest inserted.
+
+    /// `order` wins; nil sorts above ordered rows so a fresh add lands on top.
+    /// sorted isn't stable, so tiebreak on recency then insertion order.
+    private static func precedes(
+        _ a: (offset: Int, element: TodoItem), _ b: (offset: Int, element: TodoItem)
+    ) -> Bool {
+        switch (a.element.order, b.element.order) {
+        case (let x?, let y?):
+            return x == y
+                ? (a.element.updatedAt, a.offset) > (b.element.updatedAt, b.offset)
+                : x < y
+        case (nil, nil):
+            return (a.element.updatedAt, a.offset) > (b.element.updatedAt, b.offset)
+        case (nil, _): return true
+        case (_, nil): return false
+        }
+    }
+
+    /// Active, newest day first.
     public var activeByDay: [(day: Date, items: [TodoItem])] {
         let cal = Calendar.current
         var buckets: [Date: [TodoItem]] = [:]
-        // sorted isn't stable, so tiebreak on insertion order.
-        let byRecency = items.enumerated()
-            .sorted { ($0.element.updatedAt, $0.offset) > ($1.element.updatedAt, $1.offset) }
-        for item in byRecency.map(\.element) where !item.isDone {
+        for item in items.enumerated().sorted(by: Self.precedes).map(\.element)
+        where !item.isDone {
             let day = cal.startOfDay(for: item.updatedAt)
             buckets[day, default: []].append(item)
         }
@@ -144,6 +163,30 @@ public final class TodoStore: ObservableObject {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         items[i].isDone.toggle()
         items[i].updatedAt = updatedAt
+        // Toggling re-buckets into another day; a stale rank would land it mid-list.
+        items[i].order = nil
+        save()
+    }
+
+    /// Manual reorder within a day section. `index` counts positions *after* `id`
+    /// is lifted out, so one destination works moving up or down.
+    public func move(_ id: UUID, to index: Int) {
+        let cal = Calendar.current
+        // Completed rows are in their own sections, not a day bucket.
+        guard let from = items.firstIndex(where: { $0.id == id }), !items[from].isDone
+        else { return }
+        let day = cal.startOfDay(for: items[from].updatedAt)
+        // Must match what the list renders, or `index` means nothing.
+        var section = items.enumerated()
+            .sorted(by: Self.precedes)
+            .map(\.offset)
+            .filter { !items[$0].isDone && cal.startOfDay(for: items[$0].updatedAt) == day }
+        guard let pos = section.firstIndex(of: from) else { return }
+        section.remove(at: pos)
+        let to = min(max(index, 0), section.count)
+        guard to != pos else { return }  // dropped where it already was
+        section.insert(from, at: to)
+        for (n, i) in section.enumerated() { items[i].order = n }
         save()
     }
 
