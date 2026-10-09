@@ -47,7 +47,6 @@ public enum AppInstaller {
     /// original is restored if the second fails.
     ///
     /// - Returns: the URL of the installed bundle (same path as `liveBundle`).
-
     @discardableResult
     public static func install(
         zipURL: URL,
