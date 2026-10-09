@@ -248,6 +248,8 @@ struct TodoView: View {
                                                     .foregroundStyle(.secondary)
                                             }
                                             .buttonStyle(.plain)
+                                            .accessibilityLabel("Delete all completed over a week ago")
+                                            .help("Delete all completed over a week ago")
                                             .padding(.trailing, 2)
                                         }
                                     }
@@ -361,6 +363,8 @@ struct TodoView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Delete all completed")
+                .help("Delete all completed")
                 .padding(.trailing, 2)
             }
         }

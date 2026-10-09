@@ -304,25 +304,27 @@ final class TodoStoreTests: XCTestCase {
         let now = Date()
         let old = Calendar.current.date(byAdding: .day, value: -8, to: now)!
         store.add("Recent done", updatedAt: now)
-        store.add("Old done", updatedAt: now)
-        store.add("Active", updatedAt: now)
-        store.toggle(store.items[0].id, updatedAt: now)
-        store.toggle(store.items[1].id, updatedAt: old)
         let recentID = store.items[0].id
+        store.add("Old done", updatedAt: now)
+        let oldID = store.items[1].id
+        store.add("Active", updatedAt: now)
+        store.toggle(recentID, updatedAt: now)
+        store.toggle(oldID, updatedAt: old)
 
         store.delete(ids: [recentID])
 
         // Only the named id goes: the other completed bucket and the active
-        // item are untouched.
-        XCTAssertEqual(Set(store.items.map(\.id)), Set([store.items[0].id, store.items[1].id]))
+        // item survive. Asserted by title — comparing id sets built from the
+        // post-delete `items` would hold whatever is left either way.
+        XCTAssertEqual(store.items.map(\.title), ["Old done", "Active"])
+        XCTAssertFalse(store.items.contains { $0.id == recentID })
         XCTAssertEqual(store.recentCompletedItems.map(\.title), [])
         XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Old done"])
-        XCTAssertTrue(store.activeByDay.flatMap(\.items).map(\.title) == ["Active"])
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["Active"])
 
-        // One write, so it must land in one pass.
+        // Persisted, not just held in memory.
         let reloaded = TodoStore(fileURL: url)
-        XCTAssertEqual(reloaded.items.count, 2)
-        XCTAssertFalse(reloaded.items.contains { $0.id == recentID })
+        XCTAssertEqual(reloaded.items.map(\.title), ["Old done", "Active"])
 
         // No ids is a no-op, not an empty write.
         store.delete(ids: [])
