@@ -13,8 +13,8 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     }
 }
 
-public extension TodoItem {
-    init(from decoder: Decoder) throws {
+extension TodoItem {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         title = try c.decode(String.self, forKey: .title)
@@ -43,13 +43,21 @@ public final class TodoStore: ObservableObject {
     }
     /// Done within the last 7 days (by updatedAt). Newest-first.
     public var recentCompletedItems: [TodoItem] {
-        guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else { return [] }
-        return items.filter { $0.isDone && $0.updatedAt >= cutoff }.sorted { $0.updatedAt > $1.updatedAt }
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else {
+            return []
+        }
+        return items.filter { $0.isDone && $0.updatedAt >= cutoff }.sorted {
+            $0.updatedAt > $1.updatedAt
+        }
     }
     /// Done with updatedAt older than 7 days. Newest-first, shown collapsed.
     public var olderCompletedItems: [TodoItem] {
-        guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else { return [] }
-        return items.filter { $0.isDone && $0.updatedAt < cutoff }.sorted { $0.updatedAt > $1.updatedAt }
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else {
+            return []
+        }
+        return items.filter { $0.isDone && $0.updatedAt < cutoff }.sorted {
+            $0.updatedAt > $1.updatedAt
+        }
     }
 
     public static func dayLabel(for date: Date, calendar: Calendar = .current) -> String {
@@ -87,7 +95,8 @@ public final class TodoStore: ObservableObject {
         if let fileURL {
             self.fileURL = fileURL
         } else {
-            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let dir = FileManager.default.urls(
+                for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("QuickTodo", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             self.fileURL = dir.appendingPathComponent("todos.json")
@@ -103,13 +112,20 @@ public final class TodoStore: ObservableObject {
         // Hardcoded to the *sandboxed* bundle id on purpose, not
         // Bundle.main.bundleIdentifier. Renaming the id would strand existing
         // todos here. Do not "fix" this to track Info.plist.
-        let legacy = container ?? URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Library/Containers/com.mdopeace.quicktodo/Data/Library/Application Support/QuickTodo/todos.json")
+        let legacy =
+            container
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(
+                "Library/Containers/com.mdopeace.quicktodo/Data/Library/Application Support/QuickTodo/todos.json"
+            )
         guard !fm.fileExists(atPath: fileURL.path) else { return }
-        guard fm.fileExists(atPath: legacy.path) else { return } // fresh install, nothing to migrate
+        guard fm.fileExists(atPath: legacy.path) else { return }  // fresh install, nothing to migrate
         guard let data = try? Data(contentsOf: legacy),
-              (try? data.write(to: fileURL, options: .atomic)) != nil else {
-            NSLog("QuickTodo: sandboxed store %@ found but unreadable — todos not migrated", legacy.path)
+            (try? data.write(to: fileURL, options: .atomic)) != nil
+        else {
+            NSLog(
+                "QuickTodo: sandboxed store %@ found but unreadable — todos not migrated",
+                legacy.path)
             return
         }
         NSLog("QuickTodo: seeded store from sandbox container %@", legacy.path)
@@ -119,7 +135,8 @@ public final class TodoStore: ObservableObject {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         // Backdated items group under the day they were written, matching the tooltip.
-        items.append(TodoItem(title: trimmed, createdAt: createdAt, updatedAt: updatedAt ?? createdAt))
+        items.append(
+            TodoItem(title: trimmed, createdAt: createdAt, updatedAt: updatedAt ?? createdAt))
         save()
     }
 
@@ -144,14 +161,17 @@ public final class TodoStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return } // first launch
+        guard let data = try? Data(contentsOf: fileURL) else { return }  // first launch
         do {
             items = try JSONDecoder().decode([TodoItem].self, from: data)
         } catch {
             // Don't overwrite corrupt data on next save — move it aside.
-            let backup = fileURL.appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970))")
+            let backup = fileURL.appendingPathExtension(
+                "corrupt-\(Int(Date().timeIntervalSince1970))")
             try? FileManager.default.moveItem(at: fileURL, to: backup)
-            NSLog("QuickTodo: corrupt store %@, moved to %@ (%@)", fileURL.path, backup.path, error.localizedDescription)
+            NSLog(
+                "QuickTodo: corrupt store %@, moved to %@ (%@)", fileURL.path, backup.path,
+                error.localizedDescription)
         }
     }
 
@@ -160,7 +180,8 @@ public final class TodoStore: ObservableObject {
             let data = try JSONEncoder().encode(items)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            NSLog("QuickTodo: failed to save store %@ (%@)", fileURL.path, error.localizedDescription)
+            NSLog(
+                "QuickTodo: failed to save store %@ (%@)", fileURL.path, error.localizedDescription)
         }
     }
 }

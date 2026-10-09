@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import QuickTodoCore
 
 /// Why the relaunch can't simply call `open`: LaunchServices dedupes by bundle
@@ -27,12 +28,13 @@ final class AppRelaunchTests: XCTestCase {
         let app = "/Applications/quicktodo.app"
 
         let start = Date()
-        try run(AppRelaunch.command(
-            for: URL(fileURLWithPath: app),
-            exiting: try exitedPID(),
-            open: try makeOpenStub(),
-            log: try makeSilentLoggerStub()
-        ))
+        try run(
+            AppRelaunch.command(
+                for: URL(fileURLWithPath: app),
+                exiting: try exitedPID(),
+                open: try makeOpenStub(),
+                log: try makeSilentLoggerStub()
+            ))
         let elapsed = Date().timeIntervalSince(start)
 
         XCTAssertEqual(
@@ -55,12 +57,13 @@ final class AppRelaunchTests: XCTestCase {
         child.arguments = ["-c", "sleep 0.4; echo child-exited >> \(log.path)"]
         try child.run()
 
-        try run(AppRelaunch.command(
-            for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
-            exiting: child.processIdentifier,
-            open: try makeOpenStub(),
-            log: try makeSilentLoggerStub()
-        ))
+        try run(
+            AppRelaunch.command(
+                for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
+                exiting: child.processIdentifier,
+                open: try makeOpenStub(),
+                log: try makeSilentLoggerStub()
+            ))
         child.waitUntilExit()
 
         let lines = try String(contentsOf: log, encoding: .utf8)
@@ -111,12 +114,13 @@ final class AppRelaunchTests: XCTestCase {
     /// can't tell `open "$0"; logger ... $?` from a version with something in
     /// between that clobbers the status.
     func test_helper_reports_the_real_open_exit_status() throws {
-        try run(AppRelaunch.command(
-            for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
-            exiting: try exitedPID(),
-            open: try makeStub(named: "open", exitCode: 3),
-            log: try makeStub(named: "logger", exitCode: 0, recordsTo: "")
-        ))
+        try run(
+            AppRelaunch.command(
+                for: URL(fileURLWithPath: "/Applications/quicktodo.app"),
+                exiting: try exitedPID(),
+                open: try makeStub(named: "open", exitCode: 3),
+                log: try makeStub(named: "logger", exitCode: 0, recordsTo: "")
+            ))
 
         XCTAssertEqual(
             try String(contentsOf: try makeLog(), encoding: .utf8),

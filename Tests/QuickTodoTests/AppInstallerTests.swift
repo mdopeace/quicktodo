@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import QuickTodoCore
 
 /// End-to-end for the install path: a real signed bundle is zipped, then
@@ -79,7 +80,8 @@ final class AppInstallerTests: XCTestCase {
     func test_missing_version_stamp_is_reported_as_unknown() throws {
         let live = root.appendingPathComponent("Tool.app")
         try makeBundle(at: live, version: "1.0.0")
-        let incoming = try makeBundle(at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
+        let incoming = try makeBundle(
+            at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
         try removeVersionStamp(from: incoming)
         try codesign(incoming)
         let archive = try zip(incoming, at: root.appendingPathComponent("incoming"))
@@ -156,7 +158,8 @@ final class AppInstallerTests: XCTestCase {
     func test_bundle_with_a_broken_signature_is_rejected() throws {
         let live = root.appendingPathComponent("Tool.app")
         try makeBundle(at: live, version: "1.0.0")
-        let incoming = try makeBundle(at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
+        let incoming = try makeBundle(
+            at: root.appendingPathComponent("incoming/Tool.app"), version: "1.1.0")
         // Tamper after signing so the seal breaks.
         try "tampered".write(
             to: incoming.appendingPathComponent("Contents/Resources/tamper.txt"),
@@ -185,7 +188,8 @@ final class AppInstallerTests: XCTestCase {
 
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: parent.path)
         defer {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parent.path)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: parent.path)
         }
 
         // Root bypasses the permission bits.
@@ -279,10 +283,12 @@ final class AppInstallerTests: XCTestCase {
 
     private func removeVersionStamp(from app: URL) throws {
         let url = app.appendingPathComponent("Contents/Info.plist")
-        var info = try PropertyListSerialization
+        var info =
+            try PropertyListSerialization
             .propertyList(from: Data(contentsOf: url), format: nil) as! [String: Any]
         info.removeValue(forKey: "CFBundleShortVersionString")
-        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: url)
     }
 
@@ -317,7 +323,8 @@ final class AppInstallerTests: XCTestCase {
             "CFBundleShortVersionString": version,
             "CFBundleVersion": version,
         ]
-        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: contents.appendingPathComponent("Info.plist"))
 
         let executable = contents.appendingPathComponent("MacOS/Tool")
@@ -336,7 +343,8 @@ final class AppInstallerTests: XCTestCase {
     }
 
     private func zip(_ bundle: URL, at destination: URL) throws -> URL {
-        try zipDirectory(bundle, at: destination.appendingPathComponent("\(bundle.lastPathComponent).zip"))
+        try zipDirectory(
+            bundle, at: destination.appendingPathComponent("\(bundle.lastPathComponent).zip"))
     }
 
     /// Mirrors package.sh's `ditto -c -k --keepParent`.
@@ -368,7 +376,10 @@ final class AppInstallerTests: XCTestCase {
         guard process.terminationStatus == 0 else {
             throw NSError(
                 domain: "AppInstallerTests", code: Int(process.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: "\(URL(fileURLWithPath: tool).lastPathComponent): \(output)"]
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "\(URL(fileURLWithPath: tool).lastPathComponent): \(output)"
+                ]
             )
         }
         return output

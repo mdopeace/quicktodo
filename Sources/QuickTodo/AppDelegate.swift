@@ -31,8 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = TodoStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory) // menubar-only, no dock icon
-        installMainMenu() // classic entry: no SwiftUI-provided menu, wire Quit ⌘Q ourselves
+        NSApp.setActivationPolicy(.accessory)  // menubar-only, no dock icon
+        installMainMenu()  // classic entry: no SwiftUI-provided menu, wire Quit ⌘Q ourselves
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let icon = NSImage(systemSymbolName: "checklist", accessibilityDescription: "QuickTodo")
@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item)
         menu.delegate = self
         statusItem.menu = menu
-        layoutMenu() // synchronous initial size; $items replay below is async
+        layoutMenu()  // synchronous initial size; $items replay below is async
         store.$items
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.layoutMenu() }
@@ -61,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotKeys.register()
 
         #if !DEBUG
-        registerLaunchAtLogin()
+            registerLaunchAtLogin()
         #endif
 
         // Start auto-update check on launch (background, non-blocking)
@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Post before measuring: the handler clears the filter, so sizing first would
         // clamp the frame to the previous session's filtered list.
         NotificationCenter.default.post(name: .quickTodoMenuWillOpen, object: nil)
-        layoutMenu() // guarantee size before showing
+        layoutMenu()  // guarantee size before showing
 
         // Check for updates on menu open (debounced: max once per 4h)
         Updater.shared.checkOnMenuOpen()
@@ -94,7 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let mainMenu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Quit QuickTodo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(
+            withTitle: "Quit QuickTodo", action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q")
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
         NSApp.mainMenu = mainMenu

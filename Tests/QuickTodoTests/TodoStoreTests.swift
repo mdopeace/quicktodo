@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import QuickTodoCore
 
 final class TodoStoreTests: XCTestCase {
@@ -86,8 +87,9 @@ final class TodoStoreTests: XCTestCase {
         // …and a later save writes a fresh store, backup untouched.
         store.add("Fresh start")
         XCTAssertEqual(store.items.count, 1)
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasPrefix(url.lastPathComponent) && $0.contains("corrupt-") }.count, 1)
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: dir.path)
+                .filter { $0.hasPrefix(url.lastPathComponent) && $0.contains("corrupt-") }.count, 1)
         let reloaded = TodoStore(fileURL: url)
         XCTAssertEqual(reloaded.items.map(\.title), ["Fresh start"])
     }
@@ -112,7 +114,8 @@ final class TodoStoreTests: XCTestCase {
 
         // No container at all → create nothing, don't fail.
         let fresh = tmp.appendingPathComponent("fresh.json")
-        TodoStore.adoptSandboxedStore(into: fresh, container: tmp.appendingPathComponent("nope.json"))
+        TodoStore.adoptSandboxedStore(
+            into: fresh, container: tmp.appendingPathComponent("nope.json"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: fresh.path))
     }
 
@@ -145,7 +148,8 @@ final class TodoStoreTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         // 721692800 is 2023-11-14 in JSONDecoder's reference date.
-        try #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":true,"createdAt":721692800}]"#
+        try
+            #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":true,"createdAt":721692800}]"#
             .write(to: url, atomically: true, encoding: .utf8)
         let store = TodoStore(fileURL: url)
         XCTAssertEqual(store.items.count, 1)

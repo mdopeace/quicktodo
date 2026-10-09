@@ -29,7 +29,8 @@ public enum AppRelaunch {
         let attempts = Int(maxWait / pollInterval)
         // Absolute tool paths so PATH can't break it; the bundle path is passed as an
         // argument so the shell never parses it.
-        let script = "i=0; while /bin/kill -0 \"$1\" 2>/dev/null && [ \"$i\" -lt \(attempts) ]; "
+        let script =
+            "i=0; while /bin/kill -0 \"$1\" 2>/dev/null && [ \"$i\" -lt \(attempts) ]; "
             + "do /bin/sleep \(pollInterval); i=$((i + 1)); done; "
             + "\(openTool) \"$0\"; "
             + "\(logTool) -t \(logTag) \"\(logTag): open exited with status $?\""

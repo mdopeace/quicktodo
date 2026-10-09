@@ -141,10 +141,11 @@ public enum AppInstaller {
     }
 
     private static func locateApp(in dir: URL) throws -> URL {
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: dir,
-            includingPropertiesForKeys: nil
-        )) ?? []
+        let contents =
+            (try? FileManager.default.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: nil
+            )) ?? []
         let apps = contents.filter { $0.pathExtension == "app" }
         guard let app = apps.first else { throw InstallError.noAppInArchive }
         return app
@@ -164,15 +165,18 @@ public enum AppInstaller {
             )
         }
 
-        let name = bundle.infoDictionary?["CFBundleExecutable"] as? String
+        let name =
+            bundle.infoDictionary?["CFBundleExecutable"] as? String
             ?? bundle.bundleURL.deletingLastPathComponent().lastPathComponent
         guard let executable = bundle.executableURL,
-              FileManager.default.isExecutableFile(atPath: executable.path) else {
+            FileManager.default.isExecutableFile(atPath: executable.path)
+        else {
             throw InstallError.missingExecutable(name)
         }
 
         guard let version = bundle.infoDictionary?["CFBundleShortVersionString"] as? String,
-              !version.isEmpty else {
+            !version.isEmpty
+        else {
             throw InstallError.versionMismatch(expected: expectedVersion, found: nil)
         }
         guard version == expectedVersion else {
@@ -223,7 +227,10 @@ public enum AppInstaller {
             throw NSError(
                 domain: "AppInstaller",
                 code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "\(URL(fileURLWithPath: tool).lastPathComponent) timed out"]
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "\(URL(fileURLWithPath: tool).lastPathComponent) timed out"
+                ]
             )
         }
         drained.wait()
@@ -232,9 +239,11 @@ public enum AppInstaller {
             throw NSError(
                 domain: "AppInstaller",
                 code: Int(process.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: output.isEmpty
-                    ? "exit status \(process.terminationStatus)"
-                    : output]
+                userInfo: [
+                    NSLocalizedDescriptionKey: output.isEmpty
+                        ? "exit status \(process.terminationStatus)"
+                        : output
+                ]
             )
         }
         return output

@@ -181,7 +181,7 @@ struct TodoView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
                     .onSubmit(submit)
-// Overlay, not prompt text: stays right-aligned at any
+                    // Overlay, not prompt text: stays right-aligned at any
                     // version length and hides while typing.
                     .overlay(alignment: .trailing) {
                         Text("v\(appVersion)")
