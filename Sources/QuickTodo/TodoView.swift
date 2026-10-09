@@ -36,6 +36,20 @@ private struct ProgressTracker {
     let spoken: String
 }
 
+/// A completed section that can be bulk-cleared.
+private enum BulkTarget {
+    case recent, older
+
+    /// Short — read aloud by VoiceOver and shown in the tooltip. The header
+    /// next to the button already names the section.
+    var spoken: String {
+        switch self {
+        case .recent: "completed"
+        case .older: "older"
+        }
+    }
+}
+
 struct TodoView: View {
     @ObservedObject var store: TodoStore
     @StateObject private var updater = Updater.shared
@@ -44,6 +58,8 @@ struct TodoView: View {
     @State private var scrollTopTick = 0
     @State private var expandedItems: Set<UUID> = []
     @State private var olderExpanded = false
+    /// Non-nil while a section's delete prompt is open.
+    @State private var bulkTarget: BulkTarget?
     @FocusState private var inputFocused: Bool
 
     /// Bind to a `let` in `body` — reading this inline re-walks the store on
@@ -95,10 +111,57 @@ struct TodoView: View {
     private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
-    /// Bulk delete clears a whole bucket, but the headers render a filtered
-    /// count — so while a search is live the button would announce "delete 1"
-    /// and remove 60. Hide it instead: search is for finding, not clearing.
+    /// Delete clears the whole bucket, but the header count is filtered —
+    /// so hide the button while searching rather than let "delete 1" remove 60.
     private var canBulkDelete: Bool { query == nil }
+
+    private func ids(for target: BulkTarget) -> [UUID] {
+        switch target {
+        case .recent: store.recentCompletedItems.map(\.id)
+        case .older: store.olderCompletedItems.map(\.id)
+        }
+    }
+
+    /// Idle trash, or confirm + cancel once opened. Icons are narrow enough to
+    /// share the header row; a text prompt would wrap the title.
+    @ViewBuilder
+    private func bulkControl(_ target: BulkTarget) -> some View {
+        if bulkTarget == target {
+            let ids = ids(for: target)
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(rowAnimation) {
+                        store.delete(ids: ids)
+                        bulkTarget = nil
+                    }
+                } label: {
+                    Image(systemName: "checkmark.circle")
+                }
+                .buttonStyle(.plain)
+                // Icons alone don't convey how much is at stake.
+                .accessibilityLabel("Delete \(ids.count) \(target.spoken)")
+                .help("Delete \(ids.count) \(target.spoken)")
+                Button {
+                    withAnimation(rowAnimation) { bulkTarget = nil }
+                } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel delete")
+                .help("Cancel")
+            }
+        } else {
+            Button {
+                withAnimation(rowAnimation) { bulkTarget = target }
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete all \(target.spoken)")
+            .help("Delete all \(target.spoken)")
+        }
+    }
 
     /// A query whose only survivors sit in the collapsed week-old section leaves
     /// the panel a single header row, so the section opens itself.
@@ -169,6 +232,8 @@ struct TodoView: View {
                 inputFocused = false
                 expandedItems.removeAll()
                 olderExpanded = false
+                // Don't reopen still showing the previous prompt.
+                bulkTarget = nil
                 scrollTopTick += 1
                 DispatchQueue.main.async { inputFocused = true }
             }
@@ -191,15 +256,13 @@ struct TodoView: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("listTop")
                             ForEach(visibleSections, id: \.day) { section in
-                                sectionHeader(TodoStore.dayLabel(for: section.day), ids: nil)
+                                sectionHeader(TodoStore.dayLabel(for: section.day), bulk: nil)
                                 ForEach(section.items) { item in
                                     row(item)
                                 }
                             }
                             if !visibleRecentDone.isEmpty {
-                                sectionHeader(
-                                    "Completed",
-                                    ids: canBulkDelete ? store.recentCompletedItems.map(\.id) : [])
+                                sectionHeader("Completed", bulk: .recent)
                                 ForEach(visibleRecentDone) { item in
                                     row(item)
                                 }
@@ -244,22 +307,11 @@ struct TodoView: View {
                                             )
                                             Spacer()
                                             if canBulkDelete {
-                                                Button {
-                                                    withAnimation(rowAnimation) {
-                                                        store.delete(
-                                                            ids: store.olderCompletedItems.map(\.id))
-                                                    }
-                                                } label: {
-                                                    Image(systemName: "trash")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .accessibilityLabel("Delete all completed over a week ago")
-                                                .help("Delete all completed over a week ago")
-                                                .padding(.trailing, 2)
+                                                bulkControl(.older)
                                             }
                                         }
+                                        .font(.caption)
+                                        .buttonStyle(.plain)
                                     }
                                 )
                                 // Horizontal padding now lives in the style, so
@@ -332,6 +384,9 @@ struct TodoView: View {
         // Filtering changes the list height without touching the store, so the
         // hosting view has to be told to re-measure.
         .onChange(of: search) { _ in
+            // Search hides the control but leaves bulkTarget set, so
+            // clearing it would re-arm the prompt on its own.
+            bulkTarget = nil
             if onlyOlderMatches {
                 withAnimation(rowAnimation) { olderExpanded = true }
             }
@@ -354,31 +409,20 @@ struct TodoView: View {
         scrollTopTick += 1
     }
 
-    /// `ids` drives the button: nil for day headers, the bucket's ids for the
-    /// completed ones, and an empty array while a search is live (see
-    /// `canBulkDelete`). One argument instead of a flag plus a hidden branch.
-    private func sectionHeader(_ label: String, ids: [UUID]?) -> some View {
+    /// `bulk` adds the delete control; nil for day headers. Passing the target
+    /// rather than a pre-filtered value keeps the label and action together.
+    private func sectionHeader(_ label: String, bulk: BulkTarget?) -> some View {
         HStack {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            if let ids, !ids.isEmpty {
-                Button {
-                    withAnimation(rowAnimation) {
-                        store.delete(ids: ids)
-                    }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Delete all completed")
-                .help("Delete all completed")
-                .padding(.trailing, 2)
+            if let bulk, canBulkDelete {
+                bulkControl(bulk)
             }
         }
+        .font(.caption)
+        .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 2)
