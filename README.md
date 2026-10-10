@@ -9,8 +9,11 @@ No Electron, no bloat — just a fast native app that lives in your menu bar.
 
 ```sh
 brew tap mdopeace/quicktodo
-brew install quicktodo
+brew install --cask quicktodo
 ```
+
+Installs `quicktodo.app` to `/Applications`. The `--cask` flag is optional —
+plain `brew install quicktodo` finds it too.
 
 To update to a newer release:
 
@@ -18,19 +21,17 @@ To update to a newer release:
 brew update && brew upgrade quicktodo
 ```
 
-Then launch:
+Or let the app update itself: it checks on launch and when opening the menu
+(menu-open checks are limited to once every 4 hours). The footer button always
+exists: it spins while checking, turns into ⬇️ when an update is available —
+click to download, verify, and install in place — and returns to ↻ as a manual
+"check now" button otherwise.
 
-```sh
-open "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app"
-```
-
-To copy it into `/Applications`, replacing the existing `quicktodo.app` there:
-
-```sh
-cp -R "$(brew --prefix)/opt/quicktodo/libexec/quicktodo.app" /Applications/
-```
-
-The app checks for updates automatically on launch and when opening the menu (menu-open checks are limited to once every 4 hours). The footer button always exists: it spins while checking, turns into ⬇️ when an update is available — click to download, verify, and install in place — and returns to ↻ as a manual "check now" button otherwise.
+Both routes work and install the same build. Homebrew tracks its own record of
+the installed version, so that record can fall out of step with an in-app
+update. `brew reinstall --cask quicktodo` re-points it at the tap's version —
+which rolls the app back if the tap hasn't published that version yet, so check
+`brew info --cask quicktodo` first if you just updated in-app.
 
 ### from source
 
