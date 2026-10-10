@@ -124,6 +124,8 @@ rm -rf "$TAP/Formula"
 F="$TAP/Cask/quicktodo.rb"
 mkdir -p "$(dirname "$F")"
 cat > "$F" <<EOF
+# frozen_string_literal: true
+
 cask "quicktodo" do
   version "$V"
   sha256 "$BINARY_SHA"
