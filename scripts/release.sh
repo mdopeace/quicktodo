@@ -110,7 +110,6 @@ BINARY_SHA=$(curl -sL "$BINARY_URL" | shasum -a 256 | awk '{print $1}')
 # 6. Update the tap cask to point at the new binary release + its checksum
 #
 # A cask, not a formula: only a cask can install an .app to /Applications.
-# No `auto_updates true` — that would make `brew upgrade` skip the app.
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 # The migration must land in the same commit as the Formula deletion, or
