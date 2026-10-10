@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO=mdopeace/quicktodo            # app repo (origin)
-TAP=mdopeace/homebrew-quicktodo    # tap repo containing Formula/quicktodo.rb (binary distribution only)
+TAP=mdopeace/homebrew-quicktodo    # tap repo containing Cask/quicktodo.rb (binary distribution only)
 
 cd "$(dirname "$0")/.."
 
@@ -47,7 +47,7 @@ echo "  - Bump version in Info.plist"
 echo "  - Create & merge PR to main"
 echo "  - Tag v$V"
 echo "  - Create GitHub Release with binary zip + checksum"
-echo "  - Update Homebrew tap formula"
+echo "  - Update Homebrew tap cask"
 read -p "Proceed? [y/N] " confirm || { echo "Aborted."; exit 1; }
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 
@@ -107,42 +107,33 @@ if [ "$HTTP_CODE" != "200" ]; then
 fi
 BINARY_SHA=$(curl -sL "$BINARY_URL" | shasum -a 256 | awk '{print $1}')
 
-# 6. Update the tap formula to point at the new binary release + its checksum
+# 6. Update the tap cask to point at the new binary release + its checksum
+#
+# A cask, not a formula: only a cask can install an .app to /Applications.
+# No `auto_updates true` — that would make `brew upgrade` skip the app.
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
-F="$TAP/Formula/quicktodo.rb"
-# Ensure formula uses libexec.install (not prefix) and correct caveats/test
+# The migration must land in the same commit as the Formula deletion, or
+# `brew upgrade` errors with "No available formula". Needs Homebrew >= 5.0.6.
+rm -rf "$TAP/Formula"
+printf '{\n  "quicktodo": "quicktodo"\n}\n' > "$TAP/tap_migrations.json"
+F="$TAP/Cask/quicktodo.rb"
+mkdir -p "$(dirname "$F")"
 cat > "$F" <<EOF
-class Quicktodo < Formula
-  desc "Minimal menu-bar todo app for macOS"
-  homepage "https://github.com/mdopeace/quicktodo"
-  url "https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
+# frozen_string_literal: true
+
+cask "quicktodo" do
+  version "$V"
   sha256 "$BINARY_SHA"
 
-  depends_on :macos
+  url "https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
+  name "QuickTodo"
+  desc "Minimal menu-bar todo app"
+  homepage "https://github.com/$REPO"
 
-  def install
-    # Extract zip manually to handle the quicktodo.app/ structure
-    system "unzip", "-q", cached_download, "-d", "."
-    libexec.install "quicktodo.app"
-  end
+  depends_on macos: ">= :ventura"
 
-  def caveats
-    <<~EOS
-      quicktodo.app installed to:
-        $(brew --prefix quicktodo)/libexec/quicktodo.app
-
-      To launch it:
-        open "$(brew --prefix quicktodo)/libexec/quicktodo.app"
-
-      To add to /Applications:
-        cp -R "$(brew --prefix quicktodo)/libexec/quicktodo.app" /Applications/
-    EOS
-  end
-
-  test do
-    assert_predicate opt_libexec/"quicktodo.app/Contents/MacOS/QuickTodo", :executable?
-  end
+  app "quicktodo.app"
 end
 EOF
 
