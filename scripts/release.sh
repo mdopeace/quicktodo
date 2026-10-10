@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO=mdopeace/quicktodo            # app repo (origin)
-TAP=mdopeace/homebrew-quicktodo    # tap repo containing Cask/quicktodo.rb (binary distribution only)
+TAP=mdopeace/homebrew-quicktodo    # tap repo containing Casks/quicktodo.rb (binary distribution only)
 
 cd "$(dirname "$0")/.."
 
@@ -110,14 +110,13 @@ BINARY_SHA=$(curl -sL "$BINARY_URL" | shasum -a 256 | awk '{print $1}')
 # 6. Update the tap cask to point at the new binary release + its checksum
 #
 # A cask, not a formula: only a cask can install an .app to /Applications.
-# No `auto_updates true` — that would make `brew upgrade` skip the app.
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 # The migration must land in the same commit as the Formula deletion, or
 # `brew upgrade` errors with "No available formula". Needs Homebrew >= 5.0.6.
 rm -rf "$TAP/Formula"
 printf '{\n  "quicktodo": "quicktodo"\n}\n' > "$TAP/tap_migrations.json"
-F="$TAP/Cask/quicktodo.rb"
+F="$TAP/Casks/quicktodo.rb"
 mkdir -p "$(dirname "$F")"
 cat > "$F" <<EOF
 # frozen_string_literal: true
@@ -126,14 +125,16 @@ cask "quicktodo" do
   version "$V"
   sha256 "$BINARY_SHA"
 
-  url "https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
+  url "https://github.com/$REPO/releases/download/v#{version}/quicktodo.app.zip"
   name "QuickTodo"
   desc "Minimal menu-bar todo app"
   homepage "https://github.com/$REPO"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "quicktodo.app"
+
+  # No `auto_updates true` — that would make `brew upgrade` skip this app.
 end
 EOF
 
