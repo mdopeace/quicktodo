@@ -109,21 +109,13 @@ BINARY_SHA=$(curl -sL "$BINARY_URL" | shasum -a 256 | awk '{print $1}')
 
 # 6. Update the tap cask to point at the new binary release + its checksum
 #
-# A cask rather than a formula: the deliverable is a .app bundle, not a binary on
-# PATH. A formula sandboxes it under libexec and leaves the user to copy it into
-# /Applications by hand; a cask installs there directly.
-#
-# Deliberately no `auto_updates true`. That stanza tells Homebrew to skip the app
-# during `brew upgrade` and defer to its in-app updater. We want brew to upgrade
-# it too, so the tap is bumped in lockstep with every release below and both
-# paths converge on the same version.
+# A cask, not a formula: only a cask can install an .app to /Applications.
+# No `auto_updates true` — that would make `brew upgrade` skip the app.
 rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
-# Drop the old formula; a name in both Formula/ and Cask/ makes the install ambiguous.
+# The migration must land in the same commit as the Formula deletion, or
+# `brew upgrade` errors with "No available formula". Needs Homebrew >= 5.0.6.
 rm -rf "$TAP/Formula"
-# Must land in the same commit as the Formula deletion, or Homebrew never notices the
-# migration and `brew upgrade` errors with "No available formula with the name".
-# Same-tap formula->cask migration needs Homebrew >= 5.0.6.
 printf '{\n  "quicktodo": "quicktodo"\n}\n' > "$TAP/tap_migrations.json"
 F="$TAP/Cask/quicktodo.rb"
 mkdir -p "$(dirname "$F")"
@@ -136,7 +128,7 @@ cask "quicktodo" do
 
   url "https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
   name "QuickTodo"
-  desc "Minimal menu-bar todo app for macOS"
+  desc "Minimal menu-bar todo app"
   homepage "https://github.com/$REPO"
 
   depends_on macos: ">= :ventura"
