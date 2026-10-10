@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO=mdopeace/quicktodo            # app repo (origin)
-TAP=mdopeace/homebrew-quicktodo    # tap repo containing Cask/quicktodo.rb (binary distribution only)
+TAP=mdopeace/homebrew-quicktodo    # tap repo containing Casks/quicktodo.rb (binary distribution only)
 
 cd "$(dirname "$0")/.."
 
@@ -117,7 +117,7 @@ git clone "https://github.com/$TAP" "$TAP"
 # `brew upgrade` errors with "No available formula". Needs Homebrew >= 5.0.6.
 rm -rf "$TAP/Formula"
 printf '{\n  "quicktodo": "quicktodo"\n}\n' > "$TAP/tap_migrations.json"
-F="$TAP/Cask/quicktodo.rb"
+F="$TAP/Casks/quicktodo.rb"
 mkdir -p "$(dirname "$F")"
 cat > "$F" <<EOF
 # frozen_string_literal: true
@@ -126,14 +126,16 @@ cask "quicktodo" do
   version "$V"
   sha256 "$BINARY_SHA"
 
-  url "https://github.com/$REPO/releases/download/v$V/quicktodo.app.zip"
+  url "https://github.com/$REPO/releases/download/v#{version}/quicktodo.app.zip"
   name "QuickTodo"
   desc "Minimal menu-bar todo app"
   homepage "https://github.com/$REPO"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "quicktodo.app"
+
+  # No `auto_updates true` — that would make `brew upgrade` skip this app.
 end
 EOF
 
