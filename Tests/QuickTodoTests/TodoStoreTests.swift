@@ -530,55 +530,6 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.items.count, 1)
     }
 
-    func test_monthly_repeat_keeps_its_day_of_month_after_a_short_month() throws {
-        let cal = Calendar.current
-        var comps = DateComponents()
-        comps.year = 2026
-        comps.month = 1
-        comps.day = 31
-        comps.hour = 9
-        let jan31 = cal.date(from: comps)!
-
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".json")
-        let store = TodoStore(fileURL: url)
-        store.add("Rent check", createdAt: jan31, updatedAt: jan31)
-        store.setRepeat(.monthly, for: store.items[0].id)
-        XCTAssertEqual(store.items[0].repeatDay, 31)
-
-        // February can't hold the 31st, so it clamps...
-        store.toggle(store.items[0].id, updatedAt: jan31)
-        let feb = store.items[1]
-        var expected = DateComponents()
-        expected.year = 2026
-        expected.month = 2
-        expected.day = 28  // 2026 is not a leap year
-        expected.hour = 9
-        XCTAssertEqual(feb.updatedAt, cal.date(from: expected))
-
-        // ...but March can, so it must go back to the 31st rather than stick
-        // at the 28th the way a plain calendar increment would.
-        store.toggle(feb.id, updatedAt: feb.updatedAt)
-        expected.month = 3
-        expected.day = 31
-        XCTAssertEqual(store.items[2].updatedAt, cal.date(from: expected))
-    }
-
-    func test_anchor_day_is_only_set_for_monthly() throws {
-        let (store, id, _) = try storeWithRepeating(.daily)
-        XCTAssertNil(store.items[0].repeatDay)
-
-        store.cycleRepeat(id)  // -> weekly
-        XCTAssertNil(store.items[0].repeatDay)
-
-        store.cycleRepeat(id)  // -> monthly
-        XCTAssertEqual(store.items[0].repeatDay, Calendar.current.component(.day, from: Date()))
-
-        store.cycleRepeat(id)  // -> off
-        XCTAssertNil(store.items[0].repeatRule)
-        XCTAssertNil(store.items[0].repeatDay)
-    }
-
     func test_set_repeat_nil_clears_it() throws {
         let (store, id, _) = try storeWithRepeating(.weekly)
         store.setRepeat(nil, for: id)
@@ -592,7 +543,6 @@ final class TodoStoreTests: XCTestCase {
 
         let reloaded = TodoStore(fileURL: url)
         XCTAssertEqual(reloaded.items.map(\.repeatRule), [.weekly, .weekly])
-        XCTAssertEqual(reloaded.items[1].repeatDay, store.items[1].repeatDay)
         XCTAssertEqual(reloaded.items[1].spawnedFrom, id)
     }
 
@@ -605,14 +555,31 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertNil(store.items[0].repeatRule)
     }
 
-    func test_cycle_walks_daily_weekly_monthly_then_off() throws {
+    /// A cadence this build no longer has must cost only that one todo. Throwing
+    /// would fail the whole array, and load() would move the file aside as
+    /// corrupt, silently losing every other item.
+    func test_unknown_cadence_degrades_to_non_repeating_without_losing_the_store() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        try
+            #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Keep me","isDone":false},{"id":"00000000-0000-0000-0000-000000000002","title":"Rent","isDone":false,"repeatRule":"monthly","repeatDay":31}]"#
+            .write(to: url, atomically: true, encoding: .utf8)
+
+        let store = TodoStore(fileURL: url)
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: url.path), "store must not be moved aside")
+        XCTAssertEqual(store.items.map(\.title), ["Keep me", "Rent"])
+        XCTAssertNil(store.items[0].repeatRule)
+        XCTAssertNil(store.items[1].repeatRule)  // monthly is no longer supported
+    }
+
+    func test_cycle_walks_daily_weekly_then_off() throws {
         let (store, id, _) = try storeWithRepeating(.daily)
         XCTAssertEqual(store.items[0].repeatRule, .daily)  // start mid-cycle
 
         store.cycleRepeat(id)
         XCTAssertEqual(store.items[0].repeatRule, .weekly)
-        store.cycleRepeat(id)
-        XCTAssertEqual(store.items[0].repeatRule, .monthly)
         store.cycleRepeat(id)
         XCTAssertNil(store.items[0].repeatRule)
     }
@@ -623,7 +590,6 @@ final class TodoStoreTests: XCTestCase {
 
         store.cycleRepeat(id)
         XCTAssertEqual(store.items[0].repeatRule, .daily)
-        store.cycleRepeat(id)
         store.cycleRepeat(id)
         store.cycleRepeat(id)
         XCTAssertNil(store.items[0].repeatRule)

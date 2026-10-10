@@ -12,14 +12,11 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     public var order: Int?
     /// Cadence; nil = one-off. Completing spawns the next occurrence.
     public var repeatRule: Repeat?
-    /// Day-of-month a monthly cadence aims for. Without it a Jan 31 task would
-    /// clamp to Feb 28 and then drift to the 28th forever.
-    public var repeatDay: Int?
     /// The occurrence this one spawned, so un-ticking a completion can retract it.
     public var spawnedFrom: UUID?
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, createdAt, updatedAt, order, repeatRule, repeatDay, spawnedFrom
+        case id, title, isDone, createdAt, updatedAt, order, repeatRule, spawnedFrom
     }
 }
 
@@ -33,36 +30,24 @@ extension TodoItem {
         // Not Date(): a legacy item must stay in the day it was created.
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
         order = try c.decodeIfPresent(Int.self, forKey: .order)
-        repeatRule = try c.decodeIfPresent(Repeat.self, forKey: .repeatRule)
-        repeatDay = try c.decodeIfPresent(Int.self, forKey: .repeatDay)
+        // Raw string, not Repeat: a cadence this build doesn't know (e.g.
+        // "monthly") has to decode to nil rather than throw, because a throw
+        // here fails the whole array and loses every todo in the file.
+        repeatRule = try c.decodeIfPresent(String.self, forKey: .repeatRule)
+            .flatMap(Repeat.init(rawValue:))
         spawnedFrom = try c.decodeIfPresent(UUID.self, forKey: .spawnedFrom)
     }
 }
 
 public enum Repeat: String, Codable {
-    case daily, weekly, monthly
+    case daily, weekly
 
     public var title: String { rawValue.capitalized }
 
-    /// `day` is the monthly anchor; ignored by the fixed-step rules.
-    func next(after date: Date, day: Int?, calendar: Calendar = .current) -> Date? {
-        switch self {
-        case .daily:
-            return calendar.date(byAdding: .day, value: 1, to: date)
-        case .weekly:
-            return calendar.date(byAdding: .day, value: 7, to: date)
-        case .monthly:
-            // byAdding already clamps Jan 31 to Feb 28; nudge back to the anchor
-            // day whenever the target month is long enough to hold it. Shifting
-            // by days keeps the time-of-day, which date(bySetting:) does not.
-            guard let month = calendar.date(byAdding: .month, value: 1, to: date),
-                let day,
-                let length = calendar.range(of: .day, in: .month, for: month)?.count,
-                day <= length
-            else { return calendar.date(byAdding: .month, value: 1, to: date) }
-            return calendar.date(
-                byAdding: .day, value: day - calendar.component(.day, from: month), to: month)
-        }
+    /// Both cadences are a fixed day offset from the completion, so a task done
+    /// late stays the same weekday rather than drifting.
+    func next(after date: Date, calendar: Calendar = .current) -> Date? {
+        calendar.date(byAdding: .day, value: self == .daily ? 1 : 7, to: date)
     }
 }
 
@@ -220,9 +205,7 @@ public final class TodoStore: ObservableObject {
             // Undoing a completion retracts the occurrence it spawned. Pending
             // only: an occurrence already completed is real work, not a leftover.
             items.removeAll { $0.spawnedFrom == id && !$0.isDone }
-        } else if let rule = items[i].repeatRule,
-            let next = rule.next(after: updatedAt, day: items[i].repeatDay)
-        {
+        } else if let rule = items[i].repeatRule, let next = rule.next(after: updatedAt) {
             var copy = items[i]
             copy.id = UUID()
             copy.isDone = false
@@ -238,19 +221,13 @@ public final class TodoStore: ObservableObject {
     public func setRepeat(_ rule: Repeat?, for id: UUID) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         items[i].repeatRule = rule
-        // Anchored to the task's own date, not today, so a backdated item
-        // keeps its day-of-month.
-        items[i].repeatDay =
-            rule == .monthly
-            ? Calendar.current.component(.day, from: items[i].createdAt)
-            : nil
         save()
     }
 
-    /// off -> daily -> weekly -> monthly -> off. Off is in the cycle so one
-    /// more click always clears it; there is no separate "remove" affordance.
+    /// off -> daily -> weekly -> off. Off is in the cycle so one more click
+    /// always clears it; there is no separate "remove" affordance.
     public func cycleRepeat(_ id: UUID) {
-        let order: [Repeat?] = [nil, .daily, .weekly, .monthly]
+        let order: [Repeat?] = [nil, .daily, .weekly]
         let i =
             items.first(where: { $0.id == id })
             .flatMap { order.firstIndex(of: $0.repeatRule) } ?? 0

@@ -65,8 +65,7 @@ extension Repeat {
     var tint: Color {
         switch self {
         case .daily: .blue
-        case .weekly: .green
-        case .monthly: .orange
+        case .weekly: .orange
         }
     }
 }
@@ -493,7 +492,7 @@ struct TodoView: View {
                 // opacity(0) still hit-tests, which would leave an invisible target.
                 .allowsHitTesting(hoveredItem == item.id)
                 .accessibilityLabel(repeatLabel(item))
-                .accessibilityHint("Click to cycle daily, weekly, monthly and off")
+                .accessibilityHint("Click to cycle daily, weekly and off")
             }
             Button {
                 withAnimation(rowAnimation) {

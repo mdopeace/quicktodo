@@ -58,7 +58,7 @@ open dist/quicktodo.app
 - Day-grouped list with "Completed" and collapsed "Completed over a week ago" sections, each bulk-clearable
 - Tap a row to expand a truncated title
 - Drag an active todo to reorder it within its day (not while searching; completed rows can't reorder) — also VoiceOver "Move up"/"Move down" actions
-- Repeat a todo daily, weekly or monthly — hover a row for the repeat button, then click to cycle the cadence (the icon tints blue/green/orange); one more click turns it off. Completing a repeating todo creates the next occurrence, dated for that day.
+- Repeat a todo daily or weekly — hover a row for the repeat button, then click to cycle the cadence (the icon tints blue/orange); one more click turns it off. Completing a repeating todo creates the next occurrence, dated for that day.
 - Global hotkey (⌘⌥T) to open menu
 - Registers itself as a login item on launch in release builds (no in-app toggle; disable it in System Settings → General → Login Items)
 - Auto-updates via GitHub API (check on launch; on menu-open at most once every 4h; footer button downloads, verifies the SHA-256, replaces the running bundle in place and reopens it)
