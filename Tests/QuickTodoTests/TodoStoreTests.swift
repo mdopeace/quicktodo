@@ -655,10 +655,10 @@ final class TodoStoreTests: XCTestCase {
 
     func test_deleting_the_completed_original_leaves_nothing_visible() throws {
         let (store, _) = try storeWithTomorrowSpawn()
-        store.delete(store.items[0].id)  // the completed one; only tomorrow's copy remains
+        store.delete(store.items[0].id)  // the completed one
 
-        // Not empty in the store, but nothing to show — so the row's empty
-        // state and its search filter must not key off raw `items`.
+        // Clearing a completed row is tidying history, not cancelling the
+        // series, so tomorrow's occurrence survives.
         XCTAssertEqual(store.items.count, 1)
         XCTAssertTrue(store.visibleItems.isEmpty)
         XCTAssertTrue(store.activeByDay.isEmpty)
