@@ -28,7 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var host: NSHostingView<TodoView>!
     private var cancellables = Set<AnyCancellable>()
     private var hotKeys = HotKeyManager()
-    private let store = TodoStore()
+    private let store: TodoStore = {
+        let store = TodoStore()
+        store.showFutureTasks = true  // TODO: testing only — drop before release
+        return store
+    }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)  // menubar-only, no dock icon

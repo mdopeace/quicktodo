@@ -453,4 +453,259 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertNil(store.items[0].order)
         XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["Legacy"])
     }
+
+    // MARK: - Repeat
+
+    /// One noon-today task already carrying `rule`.
+    private func storeWithRepeating(
+        _ rule: Repeat
+    ) throws -> (store: TodoStore, id: UUID, url: URL) {
+        let cal = Calendar.current
+        let noon = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Water plants", createdAt: noon, updatedAt: noon)
+        let id = store.items[0].id
+        store.setRepeat(rule, for: id)
+        return (store, id, url)
+    }
+
+    func test_completing_a_repeat_spawns_the_next_occurrence() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        let noon = store.items[0].updatedAt
+
+        store.toggle(id, updatedAt: noon)
+
+        XCTAssertEqual(store.items.count, 2)
+        let (done, next) = (store.items[0], store.items[1])
+        XCTAssertTrue(done.isDone)
+        XCTAssertEqual(next.title, "Water plants")
+        XCTAssertFalse(next.isDone)
+        XCTAssertEqual(next.repeatRule, .daily)
+        XCTAssertNotEqual(next.id, done.id)
+        XCTAssertNil(next.order)
+
+        let expected = Calendar.current.date(byAdding: .day, value: 1, to: noon)!
+        XCTAssertEqual(next.createdAt, noon)  // authored today, not on the due date
+        XCTAssertEqual(next.updatedAt, expected)
+        XCTAssertEqual(store.recentCompletedItems.map(\.id), [id])
+        XCTAssertTrue(store.activeByDay.isEmpty)
+    }
+
+    func test_unmarking_a_repeat_retracts_the_occurrence_it_spawned() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        store.toggle(id, updatedAt: Date())
+        XCTAssertEqual(store.items.count, 2)
+
+        store.toggle(id, updatedAt: Date().addingTimeInterval(60))
+        // Undoing the completion takes tomorrow's copy with it.
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertFalse(store.items[0].isDone)
+
+        // Re-completing yields exactly one occurrence, not a duplicate.
+        store.toggle(id, updatedAt: Date().addingTimeInterval(120))
+        XCTAssertEqual(store.items.count, 2)
+        XCTAssertEqual(store.items.filter { !$0.isDone }.count, 1)
+    }
+
+    func test_unmarking_keeps_an_occurrence_that_was_already_completed() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        store.toggle(id, updatedAt: Date())  // done today, spawns tomorrow's copy
+        let copyID = store.items[1].id
+        store.toggle(copyID, updatedAt: Date())  // that occurrence completed too
+
+        store.toggle(id, updatedAt: Date())  // un-mark the original
+
+        // Tomorrow's work is real, not a leftover, so it survives.
+        XCTAssertEqual(store.items.count, 3)
+        XCTAssertTrue(store.items.contains { $0.id == copyID && $0.isDone })
+    }
+
+    func test_unmarking_a_plain_task_spawns_nothing() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        store.setRepeat(nil, for: id)
+        store.toggle(id, updatedAt: Date())
+        store.toggle(id, updatedAt: Date().addingTimeInterval(60))
+        XCTAssertEqual(store.items.count, 1)
+    }
+
+    func test_monthly_repeat_keeps_its_day_of_month_after_a_short_month() throws {
+        let cal = Calendar.current
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 1
+        comps.day = 31
+        comps.hour = 9
+        let jan31 = cal.date(from: comps)!
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Rent check", createdAt: jan31, updatedAt: jan31)
+        store.setRepeat(.monthly, for: store.items[0].id)
+        XCTAssertEqual(store.items[0].repeatDay, 31)
+
+        // February can't hold the 31st, so it clamps...
+        store.toggle(store.items[0].id, updatedAt: jan31)
+        let feb = store.items[1]
+        var expected = DateComponents()
+        expected.year = 2026
+        expected.month = 2
+        expected.day = 28  // 2026 is not a leap year
+        expected.hour = 9
+        XCTAssertEqual(feb.updatedAt, cal.date(from: expected))
+
+        // ...but March can, so it must go back to the 31st rather than stick
+        // at the 28th the way a plain calendar increment would.
+        store.toggle(feb.id, updatedAt: feb.updatedAt)
+        expected.month = 3
+        expected.day = 31
+        XCTAssertEqual(store.items[2].updatedAt, cal.date(from: expected))
+    }
+
+    func test_anchor_day_is_only_set_for_monthly() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        XCTAssertNil(store.items[0].repeatDay)
+
+        store.cycleRepeat(id)  // -> weekly
+        XCTAssertNil(store.items[0].repeatDay)
+
+        store.cycleRepeat(id)  // -> monthly
+        XCTAssertEqual(store.items[0].repeatDay, Calendar.current.component(.day, from: Date()))
+
+        store.cycleRepeat(id)  // -> off
+        XCTAssertNil(store.items[0].repeatRule)
+        XCTAssertNil(store.items[0].repeatDay)
+    }
+
+    func test_set_repeat_nil_clears_it() throws {
+        let (store, id, _) = try storeWithRepeating(.weekly)
+        store.setRepeat(nil, for: id)
+        store.toggle(id, updatedAt: Date())
+        XCTAssertEqual(store.items.count, 1)
+    }
+
+    func test_repeat_survives_reload() throws {
+        let (store, id, url) = try storeWithRepeating(.weekly)
+        store.toggle(id, updatedAt: Date())
+
+        let reloaded = TodoStore(fileURL: url)
+        XCTAssertEqual(reloaded.items.map(\.repeatRule), [.weekly, .weekly])
+        XCTAssertEqual(reloaded.items[1].repeatDay, store.items[1].repeatDay)
+        XCTAssertEqual(reloaded.items[1].spawnedFrom, id)
+    }
+
+    func test_legacy_json_without_repeat_decodes_as_non_repeating() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        try #"[{"id":"00000000-0000-0000-0000-000000000001","title":"Legacy","isDone":false}]"#
+            .write(to: url, atomically: true, encoding: .utf8)
+        let store = TodoStore(fileURL: url)
+        XCTAssertNil(store.items[0].repeatRule)
+    }
+
+    func test_cycle_walks_daily_weekly_monthly_then_off() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        XCTAssertEqual(store.items[0].repeatRule, .daily)  // start mid-cycle
+
+        store.cycleRepeat(id)
+        XCTAssertEqual(store.items[0].repeatRule, .weekly)
+        store.cycleRepeat(id)
+        XCTAssertEqual(store.items[0].repeatRule, .monthly)
+        store.cycleRepeat(id)
+        XCTAssertNil(store.items[0].repeatRule)
+    }
+
+    func test_cycle_from_off_starts_at_daily_and_never_spawns_when_cleared() throws {
+        let (store, id, _) = try storeWithRepeating(.weekly)
+        store.setRepeat(nil, for: id)
+
+        store.cycleRepeat(id)
+        XCTAssertEqual(store.items[0].repeatRule, .daily)
+        store.cycleRepeat(id)
+        store.cycleRepeat(id)
+        store.cycleRepeat(id)
+        XCTAssertNil(store.items[0].repeatRule)
+
+        store.toggle(id, updatedAt: Date())
+        XCTAssertEqual(store.items.count, 1, "a cleared cadence must not spawn")
+    }
+
+    // MARK: - Future occurrences
+
+    private func storeWithTomorrowSpawn() throws -> (store: TodoStore, tomorrow: Date) {
+        let cal = Calendar.current
+        let noon = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Water plants", createdAt: noon, updatedAt: noon)
+        store.setRepeat(.daily, for: store.items[0].id)
+        store.toggle(store.items[0].id, updatedAt: noon)
+        return (store, cal.date(byAdding: .day, value: 1, to: noon)!)
+    }
+
+    func test_occurrence_spawns_dated_tomorrow_and_stays_hidden() throws {
+        let (store, tomorrow) = try storeWithTomorrowSpawn()
+
+        // Spawned but dated tomorrow, so nothing is actionable today.
+        XCTAssertEqual(store.items.count, 2)
+        XCTAssertEqual(store.items[1].updatedAt, tomorrow)
+        XCTAssertTrue(store.activeByDay.isEmpty)
+        XCTAssertEqual(store.visibleItems.map(\.isDone), [true])
+    }
+
+    func test_hidden_occurrences_leave_the_progress_count_but_today_survives() throws {
+        let (store, _) = try storeWithTomorrowSpawn()
+        XCTAssertEqual(store.visibleItems.count, 1)  // the completed original only
+
+        let cal = Calendar.current
+        let noon = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        store.add("Today", createdAt: noon, updatedAt: noon)
+
+        XCTAssertEqual(store.visibleItems.count, 2)
+        XCTAssertEqual(store.activeByDay.flatMap { $0.items }.map(\.title), ["Today"])
+    }
+
+    func test_occurrence_keeps_the_series_authoring_date() throws {
+        let (store, tomorrow) = try storeWithTomorrowSpawn()
+        let authored = store.items[0].createdAt
+
+        XCTAssertEqual(store.items[1].createdAt, authored)
+        XCTAssertNotEqual(store.items[1].updatedAt, authored)
+        XCTAssertEqual(store.items[1].updatedAt, tomorrow)
+    }
+
+    func test_completed_items_are_never_hidden() throws {
+        let (store, _) = try storeWithTomorrowSpawn()
+        let pendingID = store.items[1].id  // tomorrow's occurrence
+        store.add("Old", createdAt: Date().addingTimeInterval(-60), updatedAt: Date())
+        store.toggle(store.items.last!.id, updatedAt: Date().addingTimeInterval(-60))
+
+        XCTAssertFalse(store.visibleItems.contains { $0.id == pendingID })
+        XCTAssertEqual(store.recentCompletedItems.count, 2)
+    }
+
+    func test_deleting_the_completed_original_leaves_nothing_visible() throws {
+        let (store, _) = try storeWithTomorrowSpawn()
+        store.delete(store.items[0].id)  // the completed one; only tomorrow's copy remains
+
+        // Not empty in the store, but nothing to show — so the row's empty
+        // state and its search filter must not key off raw `items`.
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertTrue(store.visibleItems.isEmpty)
+        XCTAssertTrue(store.activeByDay.isEmpty)
+    }
+
+    func test_retracting_the_last_occurrence_clears_the_row_entirely() throws {
+        let (store, id, _) = try storeWithRepeating(.daily)
+        store.toggle(id, updatedAt: Date())
+        store.toggle(id, updatedAt: Date().addingTimeInterval(60))
+
+        // Un-marking took the pending copy with it, so the todo is back to being
+        // a single ordinary active row.
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.id), [id])
+    }
 }

@@ -10,9 +10,16 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     /// Manual position in its day section; nil = never reordered, so it falls
     /// back to recency.
     public var order: Int?
+    /// Cadence; nil = one-off. Completing spawns the next occurrence.
+    public var repeatRule: Repeat?
+    /// Day-of-month a monthly cadence aims for. Without it a Jan 31 task would
+    /// clamp to Feb 28 and then drift to the 28th forever.
+    public var repeatDay: Int?
+    /// The occurrence this one spawned, so un-ticking a completion can retract it.
+    public var spawnedFrom: UUID?
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, createdAt, updatedAt, order
+        case id, title, isDone, createdAt, updatedAt, order, repeatRule, repeatDay, spawnedFrom
     }
 }
 
@@ -26,11 +33,54 @@ extension TodoItem {
         // Not Date(): a legacy item must stay in the day it was created.
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
         order = try c.decodeIfPresent(Int.self, forKey: .order)
+        repeatRule = try c.decodeIfPresent(Repeat.self, forKey: .repeatRule)
+        repeatDay = try c.decodeIfPresent(Int.self, forKey: .repeatDay)
+        spawnedFrom = try c.decodeIfPresent(UUID.self, forKey: .spawnedFrom)
+    }
+}
+
+public enum Repeat: String, Codable {
+    case daily, weekly, monthly
+
+    public var title: String { rawValue.capitalized }
+
+    /// `day` is the monthly anchor; ignored by the fixed-step rules.
+    func next(after date: Date, day: Int?, calendar: Calendar = .current) -> Date? {
+        switch self {
+        case .daily:
+            return calendar.date(byAdding: .day, value: 1, to: date)
+        case .weekly:
+            return calendar.date(byAdding: .day, value: 7, to: date)
+        case .monthly:
+            // byAdding already clamps Jan 31 to Feb 28; nudge back to the anchor
+            // day whenever the target month is long enough to hold it. Shifting
+            // by days keeps the time-of-day, which date(bySetting:) does not.
+            guard let month = calendar.date(byAdding: .month, value: 1, to: date),
+                let day,
+                let length = calendar.range(of: .day, in: .month, for: month)?.count,
+                day <= length
+            else { return calendar.date(byAdding: .month, value: 1, to: date) }
+            return calendar.date(
+                byAdding: .day, value: day - calendar.component(.day, from: month), to: month)
+        }
     }
 }
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
+
+    /// Surface occurrences dated after today. Off by default; flip it on to
+    /// exercise repeat spawning.
+    public var showFutureTasks = false
+
+    /// What the list and the progress counter see. A repeat spawns its next
+    /// occurrence dated ahead, which stays out of the way until its day comes.
+    public var visibleItems: [TodoItem] {
+        guard !showFutureTasks else { return items }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        return items.filter { $0.isDone || cal.startOfDay(for: $0.updatedAt) <= today }
+    }
 
     /// `order` wins; nil sorts above ordered rows so a fresh add lands on top.
     /// sorted isn't stable, so tiebreak on recency then insertion order.
@@ -53,7 +103,7 @@ public final class TodoStore: ObservableObject {
     public var activeByDay: [(day: Date, items: [TodoItem])] {
         let cal = Calendar.current
         var buckets: [Date: [TodoItem]] = [:]
-        for item in items.enumerated().sorted(by: Self.precedes).map(\.element)
+        for item in visibleItems.enumerated().sorted(by: Self.precedes).map(\.element)
         where !item.isDone {
             let day = cal.startOfDay(for: item.updatedAt)
             buckets[day, default: []].append(item)
@@ -161,11 +211,50 @@ public final class TodoStore: ObservableObject {
 
     public func toggle(_ id: UUID, updatedAt: Date = Date()) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        let wasDone = items[i].isDone
         items[i].isDone.toggle()
         items[i].updatedAt = updatedAt
         // Toggling re-buckets into another day; a stale rank would land it mid-list.
         items[i].order = nil
+        if wasDone {
+            // Undoing a completion retracts the occurrence it spawned. Pending
+            // only: an occurrence already completed is real work, not a leftover.
+            items.removeAll { $0.spawnedFrom == id && !$0.isDone }
+        } else if let rule = items[i].repeatRule,
+            let next = rule.next(after: updatedAt, day: items[i].repeatDay)
+        {
+            var copy = items[i]
+            copy.id = UUID()
+            copy.isDone = false
+            // createdAt stays put: the tooltip reads it, and nothing is created
+            // on a future date. updatedAt is the field that files the occurrence.
+            copy.updatedAt = next
+            copy.spawnedFrom = items[i].id
+            items.append(copy)
+        }
         save()
+    }
+
+    public func setRepeat(_ rule: Repeat?, for id: UUID) {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i].repeatRule = rule
+        // Anchored to the task's own date, not today, so a backdated item
+        // keeps its day-of-month.
+        items[i].repeatDay =
+            rule == .monthly
+            ? Calendar.current.component(.day, from: items[i].createdAt)
+            : nil
+        save()
+    }
+
+    /// off -> daily -> weekly -> monthly -> off. Off is in the cycle so one
+    /// more click always clears it; there is no separate "remove" affordance.
+    public func cycleRepeat(_ id: UUID) {
+        let order: [Repeat?] = [nil, .daily, .weekly, .monthly]
+        let i =
+            items.first(where: { $0.id == id })
+            .flatMap { order.firstIndex(of: $0.repeatRule) } ?? 0
+        setRepeat(order[(i + 1) % order.count], for: id)
     }
 
     /// Manual reorder within a day section. `index` counts positions *after* `id`
