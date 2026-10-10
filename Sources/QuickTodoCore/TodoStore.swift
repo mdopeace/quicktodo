@@ -10,9 +10,12 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     /// Manual position in its day section; nil = never reordered, so it falls
     /// back to recency.
     public var order: Int?
+    public var repeatRule: Repeat?
+    /// Set on the spawned occurrence, so un-ticking the completion retracts it.
+    public var spawnedFrom: UUID?
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, createdAt, updatedAt, order
+        case id, title, isDone, createdAt, updatedAt, order, repeatRule, spawnedFrom
     }
 }
 
@@ -26,11 +29,38 @@ extension TodoItem {
         // Not Date(): a legacy item must stay in the day it was created.
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
         order = try c.decodeIfPresent(Int.self, forKey: .order)
+        // Unknown cadence must decode to nil, not throw: a throw here fails
+        // the whole array and costs the user every todo.
+        repeatRule = try c.decodeIfPresent(String.self, forKey: .repeatRule)
+            .flatMap(Repeat.init(rawValue:))
+        spawnedFrom = try c.decodeIfPresent(UUID.self, forKey: .spawnedFrom)
+    }
+}
+
+public enum Repeat: String, Codable {
+    case daily, weekly
+
+    public var title: String { rawValue.capitalized }
+
+    /// A fixed day offset from the completion, so finishing late keeps the weekday.
+    func next(after date: Date, calendar: Calendar = .current) -> Date? {
+        calendar.date(byAdding: .day, value: self == .daily ? 1 : 7, to: date)
     }
 }
 
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
+
+    /// Off by default; flip on to exercise repeat spawning.
+    public var showFutureTasks = false
+
+    /// Future occurrences stay hidden until their day comes.
+    public var visibleItems: [TodoItem] {
+        guard !showFutureTasks else { return items }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        return items.filter { $0.isDone || cal.startOfDay(for: $0.updatedAt) <= today }
+    }
 
     /// `order` wins; nil sorts above ordered rows so a fresh add lands on top.
     /// sorted isn't stable, so tiebreak on recency then insertion order.
@@ -53,7 +83,7 @@ public final class TodoStore: ObservableObject {
     public var activeByDay: [(day: Date, items: [TodoItem])] {
         let cal = Calendar.current
         var buckets: [Date: [TodoItem]] = [:]
-        for item in items.enumerated().sorted(by: Self.precedes).map(\.element)
+        for item in visibleItems.enumerated().sorted(by: Self.precedes).map(\.element)
         where !item.isDone {
             let day = cal.startOfDay(for: item.updatedAt)
             buckets[day, default: []].append(item)
@@ -161,11 +191,39 @@ public final class TodoStore: ObservableObject {
 
     public func toggle(_ id: UUID, updatedAt: Date = Date()) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        let wasDone = items[i].isDone
         items[i].isDone.toggle()
         items[i].updatedAt = updatedAt
         // Toggling re-buckets into another day; a stale rank would land it mid-list.
         items[i].order = nil
+        if wasDone {
+            // Pending only: a completed occurrence is real work, not a leftover.
+            items.removeAll { $0.spawnedFrom == id && !$0.isDone }
+        } else if let rule = items[i].repeatRule, let next = rule.next(after: updatedAt) {
+            var copy = items[i]
+            copy.id = UUID()
+            copy.isDone = false
+            // updatedAt files the occurrence; createdAt stays put for the tooltip.
+            copy.updatedAt = next
+            copy.spawnedFrom = items[i].id
+            items.append(copy)
+        }
         save()
+    }
+
+    public func setRepeat(_ rule: Repeat?, for id: UUID) {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i].repeatRule = rule
+        save()
+    }
+
+    /// Off is in the cycle so one more click always clears it.
+    public func cycleRepeat(_ id: UUID) {
+        let order: [Repeat?] = [nil, .daily, .weekly]
+        let i =
+            items.first(where: { $0.id == id })
+            .flatMap { order.firstIndex(of: $0.repeatRule) } ?? 0
+        setRepeat(order[(i + 1) % order.count], for: id)
     }
 
     /// Manual reorder within a day section. `index` counts positions *after* `id`

@@ -61,6 +61,15 @@ private enum BulkTarget {
     }
 }
 
+extension Repeat {
+    var tint: Color {
+        switch self {
+        case .daily: .blue
+        case .weekly: .orange
+        }
+    }
+}
+
 struct TodoView: View {
     @ObservedObject var store: TodoStore
     @StateObject private var updater = Updater.shared
@@ -68,6 +77,7 @@ struct TodoView: View {
     @State private var search = ""
     @State private var scrollTopTick = 0
     @State private var expandedItems: Set<UUID> = []
+    @State private var hoveredItem: UUID?
     @State private var olderExpanded = false
     /// Non-nil while a section's delete prompt is open.
     @State private var bulkTarget: BulkTarget?
@@ -77,8 +87,8 @@ struct TodoView: View {
     /// every keystroke.
     private var progress: ProgressTracker {
         let older = store.olderCompletedItems.count
-        let done = store.items.filter(\.isDone).count - older
-        let total = store.items.count - older
+        let done = store.visibleItems.filter(\.isDone).count - older
+        let total = store.visibleItems.count - older
         let value = total > 0 ? Double(done) / Double(total) : 0
         return ProgressTracker(
             value: value,
@@ -95,7 +105,9 @@ struct TodoView: View {
     /// render, so deleting the last match mid-search never empties the menu.
     private var query: String? {
         guard !search.isEmpty,
-            store.items.contains(where: { $0.title.localizedCaseInsensitiveContains(search) })
+            store.visibleItems.contains(where: {
+                $0.title.localizedCaseInsensitiveContains(search)
+            })
         else { return nil }
         return search
     }
@@ -236,6 +248,7 @@ struct TodoView: View {
                 inputFocused = false
                 expandedItems.removeAll()
                 olderExpanded = false
+                hoveredItem = nil
                 // Don't reopen still showing the previous prompt.
                 bulkTarget = nil
                 scrollTopTick += 1
@@ -252,7 +265,7 @@ struct TodoView: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            if store.items.isEmpty {
+            if store.visibleItems.isEmpty {
                 Text("Nothing here yet")
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
@@ -466,6 +479,21 @@ struct TodoView: View {
                     "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
                 )
             Spacer(minLength: 8)
+            if !item.isDone {
+                Button {
+                    store.cycleRepeat(item.id)
+                } label: {
+                    Image(systemName: "repeat")
+                        .foregroundStyle(item.repeatRule?.tint ?? .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(repeatLabel(item))
+                .opacity(hoveredItem == item.id ? 1 : 0)
+                // opacity(0) still hit-tests, which would leave an invisible target.
+                .allowsHitTesting(hoveredItem == item.id)
+                .accessibilityLabel(repeatLabel(item))
+                .accessibilityHint("Click to cycle daily, weekly and off")
+            }
             Button {
                 withAnimation(rowAnimation) {
                     store.delete(item.id)
@@ -478,12 +506,23 @@ struct TodoView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .onHover { inside in
+            if inside {
+                hoveredItem = item.id
+            } else if hoveredItem == item.id {
+                hoveredItem = nil
+            }
+        }
 
         // Only done rows get a createdAt tooltip; an empty help would still be read
         // out and inherit onto the row's child buttons.
         return Group {
             if item.isDone {
-                content.help("Created: \(TodoStore.dayLabel(for: item.createdAt))")
+                content.help(
+                    item.repeatRule == nil
+                        ? "Created: \(TodoStore.dayLabel(for: item.createdAt))"
+                        : "Created: \(TodoStore.dayLabel(for: item.createdAt)) · \(repeatLabel(item))"
+                )
             } else {
                 // Reorder controls are active-only: done rows sit in their own
                 // sections, so offering them would be a no-op.
@@ -513,8 +552,15 @@ struct TodoView: View {
                     .accessibilityAction(named: Text("Move down")) {
                         nudge(item.id, by: 1, in: section)
                     }
+                    .accessibilityAction(named: Text("Change repeat")) {
+                        store.cycleRepeat(item.id)
+                    }
             }
         }
+    }
+
+    private func repeatLabel(_ item: TodoItem) -> String {
+        item.repeatRule.map { "Repeats \($0.title.lowercased())" } ?? "Repeat off"
     }
 
     private func nudge(_ id: UUID, by step: Int, in section: [TodoItem]) {
