@@ -28,8 +28,10 @@ click to download, verify, and install in place — and returns to ↻ as a manu
 "check now" button otherwise.
 
 Both routes work and install the same build. Homebrew tracks its own record of
-the installed version, so if you update in-app, run
-`brew reinstall --cask quicktodo` once to resync it.
+the installed version, so that record can fall out of step with an in-app
+update. `brew reinstall --cask quicktodo` re-points it at the tap's version —
+which rolls the app back if the tap hasn't published that version yet, so check
+`brew info --cask quicktodo` first if you just updated in-app.
 
 ### from source
 

@@ -121,6 +121,10 @@ rm -rf "$TAP"
 git clone "https://github.com/$TAP" "$TAP"
 # Drop the old formula; a name in both Formula/ and Cask/ makes the install ambiguous.
 rm -rf "$TAP/Formula"
+# Must land in the same commit as the Formula deletion, or Homebrew never notices the
+# migration and `brew upgrade` errors with "No available formula with the name".
+# Same-tap formula->cask migration needs Homebrew >= 5.0.6.
+printf '{\n  "quicktodo": "quicktodo"\n}\n' > "$TAP/tap_migrations.json"
 F="$TAP/Cask/quicktodo.rb"
 mkdir -p "$(dirname "$F")"
 cat > "$F" <<EOF
