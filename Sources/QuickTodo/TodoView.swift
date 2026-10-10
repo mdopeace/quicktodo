@@ -518,8 +518,6 @@ struct TodoView: View {
         // out and inherit onto the row's child buttons.
         return Group {
             if item.isDone {
-                // The repeat button is hidden on done rows, so this is the only
-                // left that the series carries on past this row.
                 content.help(
                     item.repeatRule == nil
                         ? "Created: \(TodoStore.dayLabel(for: item.createdAt))"
@@ -554,7 +552,6 @@ struct TodoView: View {
                     .accessibilityAction(named: Text("Move down")) {
                         nudge(item.id, by: 1, in: section)
                     }
-                    // The button is behind onHover, which VoiceOver never fires.
                     .accessibilityAction(named: Text("Change repeat")) {
                         store.cycleRepeat(item.id)
                     }

@@ -10,9 +10,8 @@ public struct TodoItem: Codable, Identifiable, Equatable {
     /// Manual position in its day section; nil = never reordered, so it falls
     /// back to recency.
     public var order: Int?
-    /// Cadence; nil = one-off. Completing spawns the next occurrence.
     public var repeatRule: Repeat?
-    /// The occurrence this one spawned, so un-ticking a completion can retract it.
+    /// Set on the spawned occurrence, so un-ticking the completion retracts it.
     public var spawnedFrom: UUID?
 
     private enum CodingKeys: String, CodingKey {
@@ -30,9 +29,8 @@ extension TodoItem {
         // Not Date(): a legacy item must stay in the day it was created.
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
         order = try c.decodeIfPresent(Int.self, forKey: .order)
-        // Raw string, not Repeat: a cadence this build doesn't know (e.g.
-        // "monthly") has to decode to nil rather than throw, because a throw
-        // here fails the whole array and loses every todo in the file.
+        // Unknown cadence must decode to nil, not throw: a throw here fails
+        // the whole array and costs the user every todo.
         repeatRule = try c.decodeIfPresent(String.self, forKey: .repeatRule)
             .flatMap(Repeat.init(rawValue:))
         spawnedFrom = try c.decodeIfPresent(UUID.self, forKey: .spawnedFrom)
@@ -44,8 +42,7 @@ public enum Repeat: String, Codable {
 
     public var title: String { rawValue.capitalized }
 
-    /// Both cadences are a fixed day offset from the completion, so a task done
-    /// late stays the same weekday rather than drifting.
+    /// A fixed day offset from the completion, so finishing late keeps the weekday.
     func next(after date: Date, calendar: Calendar = .current) -> Date? {
         calendar.date(byAdding: .day, value: self == .daily ? 1 : 7, to: date)
     }
@@ -54,12 +51,10 @@ public enum Repeat: String, Codable {
 public final class TodoStore: ObservableObject {
     @Published public private(set) var items: [TodoItem] = []
 
-    /// Surface occurrences dated after today. Off by default; flip it on to
-    /// exercise repeat spawning.
+    /// Off by default; flip on to exercise repeat spawning.
     public var showFutureTasks = false
 
-    /// What the list and the progress counter see. A repeat spawns its next
-    /// occurrence dated ahead, which stays out of the way until its day comes.
+    /// Future occurrences stay hidden until their day comes.
     public var visibleItems: [TodoItem] {
         guard !showFutureTasks else { return items }
         let cal = Calendar.current
@@ -202,15 +197,13 @@ public final class TodoStore: ObservableObject {
         // Toggling re-buckets into another day; a stale rank would land it mid-list.
         items[i].order = nil
         if wasDone {
-            // Undoing a completion retracts the occurrence it spawned. Pending
-            // only: an occurrence already completed is real work, not a leftover.
+            // Pending only: a completed occurrence is real work, not a leftover.
             items.removeAll { $0.spawnedFrom == id && !$0.isDone }
         } else if let rule = items[i].repeatRule, let next = rule.next(after: updatedAt) {
             var copy = items[i]
             copy.id = UUID()
             copy.isDone = false
-            // createdAt stays put: the tooltip reads it, and nothing is created
-            // on a future date. updatedAt is the field that files the occurrence.
+            // updatedAt files the occurrence; createdAt stays put for the tooltip.
             copy.updatedAt = next
             copy.spawnedFrom = items[i].id
             items.append(copy)
@@ -224,8 +217,7 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
-    /// off -> daily -> weekly -> off. Off is in the cycle so one more click
-    /// always clears it; there is no separate "remove" affordance.
+    /// Off is in the cycle so one more click always clears it.
     public func cycleRepeat(_ id: UUID) {
         let order: [Repeat?] = [nil, .daily, .weekly]
         let i =
