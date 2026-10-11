@@ -134,7 +134,12 @@ cask "quicktodo" do
 
   app "quicktodo.app"
 
-  # No `auto_updates true` — that would make `brew upgrade` skip this app.
+  # Ad-hoc signed, not notarized, so Gatekeeper blocks the first launch.
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:         ["-dr", "com.apple.quarantine", "{{appdir}}/quicktodo.app"],
+        must_succeed: false
+  end
 end
 EOF
 
