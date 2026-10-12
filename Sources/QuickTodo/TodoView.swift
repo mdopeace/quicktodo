@@ -479,7 +479,7 @@ struct TodoView: View {
                     "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
                 )
             Spacer(minLength: 8)
-            if !item.isDone {
+            if !item.isDone, hoveredItem == item.id {
                 Button {
                     store.cycleRepeat(item.id)
                 } label: {
@@ -488,9 +488,6 @@ struct TodoView: View {
                 }
                 .buttonStyle(.plain)
                 .help(repeatLabel(item))
-                .opacity(hoveredItem == item.id ? 1 : 0)
-                // opacity(0) still hit-tests, which would leave an invisible target.
-                .allowsHitTesting(hoveredItem == item.id)
                 .accessibilityLabel(repeatLabel(item))
                 .accessibilityHint("Click to cycle daily, weekly and off")
             }
