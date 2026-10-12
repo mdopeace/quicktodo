@@ -478,7 +478,6 @@ struct TodoView: View {
                 .accessibilityHint(
                     "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
                 )
-            Spacer(minLength: 8)
             if !item.isDone, hoveredItem == item.id {
                 Button {
                     store.cycleRepeat(item.id)
