@@ -57,6 +57,7 @@ open dist/quicktodo.app
 - Live search from the same input (3+ characters filters after a 200ms debounce; no match falls back to the full list)
 - Progress tracker (completed/total, with week-old completed counted separately)
 - Day-grouped list with "Completed" and collapsed "Completed over a week ago" sections, each bulk-clearable
+- Move a past-due todo to today — hover a row for the icon beside the repeat button and it moves on one click, or use the section header button to move a whole day at once (confirms first, with the row count). Either way the todo lands at the top of Today
 - Tap a row to expand a truncated title
 - Drag an active todo to reorder it within its day (not while searching; completed rows can't reorder) — also VoiceOver "Move up"/"Move down" actions
 - Repeat a todo daily or weekly — hover a row for the repeat button, then click to cycle the cadence (the icon tints blue/orange); one more click turns it off. Completing a repeating todo creates the next occurrence, dated for that day.

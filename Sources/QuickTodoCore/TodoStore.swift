@@ -248,6 +248,25 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
+    /// Re-file tasks into today, at the top of the list: `order` belongs to the
+    /// old day's section, so it clears. Done rows keep their timestamp.
+    public func moveToToday(ids: [UUID]) {
+        let wanted = Set(ids)
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let moving = items.indices.filter {
+            wanted.contains(items[$0].id) && !items[$0].isDone
+                && cal.startOfDay(for: items[$0].updatedAt) < today
+        }
+        guard !moving.isEmpty else { return }
+        let now = Date()
+        for i in moving {
+            items[i].updatedAt = now
+            items[i].order = nil
+        }
+        save()
+    }
+
     public func delete(_ id: UUID) {
         items.removeAll { $0.id == id }
         save()

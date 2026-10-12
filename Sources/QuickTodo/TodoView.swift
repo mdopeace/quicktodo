@@ -48,15 +48,33 @@ private struct FooterLink: View {
     }
 }
 
-/// A completed section that can be bulk-cleared.
-private enum BulkTarget {
+/// A section with a header control: delete it, or move it to today. The
+/// labels double as tooltips and VoiceOver names.
+private enum BulkTarget: Equatable {
     case recent, older
+    case day(Date)
 
-    /// Short — VoiceOver text and tooltip. The header already names the section.
-    var spoken: String {
+    var icon: String {
         switch self {
-        case .recent: "completed"
-        case .older: "older"
+        case .recent, .older: "trash"
+        case .day: "arrow.forward"
+        }
+    }
+
+    var idleLabel: String {
+        switch self {
+        case .recent: "Delete all completed"
+        case .older: "Delete all older"
+        case .day: "Move all to today"
+        }
+    }
+
+    /// Confirm text; the count is the point.
+    func confirmLabel(_ count: Int) -> String {
+        switch self {
+        case .recent: "Delete \(count) completed"
+        case .older: "Delete \(count) older"
+        case .day: "Move \(count) to today"
         }
     }
 }
@@ -130,19 +148,25 @@ struct TodoView: View {
     private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
-    /// Delete clears the whole bucket but the header count is filtered, so hide
-    /// the button while searching rather than let "delete 1" remove 60.
-    private var canBulkDelete: Bool { query == nil }
+    /// A section control acts on every row, so hide it while searching.
+    private var canBulkAct: Bool { query == nil }
 
     private func ids(for target: BulkTarget) -> [UUID] {
         switch target {
         case .recent: store.recentCompletedItems.map(\.id)
         case .older: store.olderCompletedItems.map(\.id)
+        case .day(let day):
+            store.activeByDay.first { $0.day == day }?.items.map(\.id) ?? []
         }
     }
 
-    /// Idle trash, or confirm + cancel once opened. Icons fit the header row; text
-    /// would wrap the title.
+    /// Only past day sections offer the move.
+    private func moveTarget(_ day: Date) -> BulkTarget? {
+        Calendar.current.isDateInToday(day) ? nil : .day(day)
+    }
+
+    /// Idle action icon, or confirm + cancel once opened. Icons fit the header
+    /// row; text would wrap the title.
     @ViewBuilder
     private func bulkControl(_ target: BulkTarget) -> some View {
         if bulkTarget == target {
@@ -150,35 +174,37 @@ struct TodoView: View {
             HStack(spacing: 8) {
                 Button {
                     withAnimation(rowAnimation) {
-                        store.delete(ids: ids)
+                        switch target {
+                        case .recent, .older: store.delete(ids: ids)
+                        case .day: store.moveToToday(ids: ids)
+                        }
                         bulkTarget = nil
                     }
                 } label: {
                     Image(systemName: "checkmark.circle")
                 }
                 .buttonStyle(.plain)
-                // The count is the whole point; a bare icon doesn't say how much is at stake.
-                .accessibilityLabel("Delete \(ids.count) \(target.spoken)")
-                .help("Delete \(ids.count) \(target.spoken)")
+                .accessibilityLabel(target.confirmLabel(ids.count))
+                .help(target.confirmLabel(ids.count))
                 Button {
                     withAnimation(rowAnimation) { bulkTarget = nil }
                 } label: {
                     Image(systemName: "xmark.circle")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Cancel delete")
+                .accessibilityLabel("Cancel")
                 .help("Cancel")
             }
         } else {
             Button {
                 withAnimation(rowAnimation) { bulkTarget = target }
             } label: {
-                Image(systemName: "trash")
+                Image(systemName: target.icon)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Delete all \(target.spoken)")
-            .help("Delete all \(target.spoken)")
+            .accessibilityLabel(target.idleLabel)
+            .help(target.idleLabel)
         }
     }
 
@@ -276,7 +302,9 @@ struct TodoView: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("listTop")
                             ForEach(visibleSections, id: \.day) { section in
-                                sectionHeader(TodoStore.dayLabel(for: section.day), bulk: nil)
+                                sectionHeader(
+                                    TodoStore.dayLabel(for: section.day),
+                                    bulk: moveTarget(section.day))
                                 ForEach(section.items) { item in
                                     row(item, in: section.items)
                                 }
@@ -325,7 +353,7 @@ struct TodoView: View {
                                                 "Completed over a week ago, \(visibleOlder.count)"
                                             )
                                             Spacer()
-                                            if canBulkDelete {
+                                            if canBulkAct {
                                                 bulkControl(.older)
                                             }
                                         }
@@ -428,15 +456,14 @@ struct TodoView: View {
         scrollTopTick += 1
     }
 
-    /// `bulk` adds the delete control; nil for day headers. Passing the target
-    /// rather than a pre-filtered value keeps label and action together.
+    /// `bulk` adds the control; nil for Today.
     private func sectionHeader(_ label: String, bulk: BulkTarget?) -> some View {
         HStack {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            if let bulk, canBulkDelete {
+            if let bulk, canBulkAct {
                 bulkControl(bulk)
             }
         }
@@ -479,6 +506,19 @@ struct TodoView: View {
                     "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
                 )
             if !item.isDone, hoveredItem == item.id {
+                if !Calendar.current.isDateInToday(item.updatedAt) {
+                    Button {
+                        withAnimation(rowAnimation) {
+                            store.moveToToday(ids: [item.id])
+                        }
+                    } label: {
+                        Image(systemName: "arrow.forward")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Move to today")
+                    .accessibilityLabel("Move to today")
+                }
                 Button {
                     store.cycleRepeat(item.id)
                 } label: {
@@ -550,6 +590,12 @@ struct TodoView: View {
                     }
                     .accessibilityAction(named: Text("Change repeat")) {
                         store.cycleRepeat(item.id)
+                    }
+                    // Hover is pointer-only, so keyboard users need this route.
+                    .accessibilityAction(named: Text("Move to today")) {
+                        withAnimation(rowAnimation) {
+                            store.moveToToday(ids: [item.id])
+                        }
                     }
             }
         }
