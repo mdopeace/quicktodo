@@ -546,7 +546,8 @@ final class TodoStoreTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
         for i in 0..<500 {
-            store.add("t\(i)", createdAt: yesterday, updatedAt: yesterday.addingTimeInterval(Double(i)))
+            store.add(
+                "t\(i)", createdAt: yesterday, updatedAt: yesterday.addingTimeInterval(Double(i)))
         }
 
         store.moveToToday(ids: store.items.map(\.id))

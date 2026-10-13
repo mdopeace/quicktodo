@@ -562,7 +562,8 @@ struct TodoView: View {
             } else {
                 // Reorder controls are active-only: done rows sit in their own
                 // sections, so offering them would be a no-op.
-                let row = content
+                let row =
+                    content
                     .draggable(item.id.uuidString)
                     .dropDestination(for: String.self) { payloads, _ in
                         // A filtered list would renumber only the visible rows.
