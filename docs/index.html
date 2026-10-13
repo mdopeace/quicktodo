@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuickTodo — a todo app that lives in your Mac menu bar</title>
+<meta name="description" content="QuickTodo is a free, open-source todo app for macOS 13+. It lives in your menu bar, opens with ⌘⌥T, and adds tasks with Return. Native SwiftUI, no Electron, no account.">
+<meta name="theme-color" content="#16171a">
+<link rel="icon" href="icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="QuickTodo — a todo app that lives in your Mac menu bar">
+<meta property="og:description" content="Native SwiftUI todo app for macOS. Hit ⌘⌥T, type, press Return. No window, no account, no Electron.">
+<meta property="og:image" content="https://mdopeace.github.io/quicktodo/icon.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    --bg: #16171a;
+    --panel: #0e0f11;
+    --line: #2a2c31;
+    --text: #f2f3f5;
+    --muted: #9aa1ab;
+    --faint: #6b7280;
+    --amber-bg: #1a1710;
+    --amber-line: #3a3222;
+    --amber: #8a7a5c;
+    --maxw: 980px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  section { padding: 64px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: 0; }
+  .lbl {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--faint); margin: 0 0 24px;
+  }
+  h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 700; letter-spacing: -.025em; line-height: 1.1; margin: 0; }
+  h1 em { font-style: normal; color: #7d8590; }
+  h2 { font-size: 20px; font-weight: 650; margin: 0 0 6px; letter-spacing: -.01em; }
+  code, .cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* hero */
+  .hero { display: flex; gap: 48px; align-items: center; padding: 72px 0 64px; }
+  .hero-copy { flex: 1.1; min-width: 0; }
+  .hero-shot { flex: 1; min-width: 0; }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); margin: 0 0 16px; }
+  .sub { font-size: 17px; color: var(--muted); margin: 18px 0 0; max-width: 34ch; }
+  .shot {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden;
+  }
+  
+  .shot img { display: block; width: 100%; height: auto; }
+
+  /* install */
+  .install { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 22px;
+  }
+  .card .tag { font-size: 12px; color: var(--faint); margin: 0 0 18px; }
+  .cmd {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+    padding: 10px 12px; font-size: 13px; color: var(--text);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 8px;
+  }
+  .cmd code { overflow-x: auto; white-space: nowrap; }
+  .copy {
+    font: inherit; font-size: 11px; color: var(--muted); background: none;
+    border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px;
+    cursor: pointer; flex: none;
+  }
+  .copy:hover { color: var(--text); border-color: var(--faint); }
+  .copy.done { color: #3fb950; border-color: #2c4a32; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--text); color: var(--bg);
+    font-size: 13px; font-weight: 600; text-decoration: none;
+    padding: 10px 16px; border-radius: 8px;
+  }
+  .btn:hover { opacity: .85; }
+  .steps { font-size: 13px; color: var(--muted); margin: 12px 0 0; padding-left: 18px; }
+  .steps li { margin-bottom: 8px; }
+  .steps b { color: var(--text); font-weight: 600; }
+  .note {
+    font-size: 13px; color: var(--amber); background: var(--amber-bg);
+    border: 1px solid var(--amber-line); border-radius: 9px;
+    padding: 14px 16px; margin: 16px 0 0; line-height: 1.6;
+  }
+  .note code { color: #b9a87f; font-size: 12px; }
+
+  /* gallery */
+  .strip {
+    display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding-bottom: 8px; scrollbar-width: thin;
+  }
+  .strip::-webkit-scrollbar { height: 6px; }
+  .strip::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .frame {
+    flex: 0 0 auto; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; scroll-snap-align: center; overflow: hidden; width: auto;
+  }
+  .frame img { display: block; height: 300px; width: auto; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .tile .glyph { font-size: 17px; }
+  .tile h3 { font-size: 14px; font-weight: 600; margin: 10px 0 0; }
+  .tile p { font-size: 13px; color: var(--muted); margin: 5px 0 0; }
+  .mir { display: inline-block; transform: scaleX(-1); font-size: 1.8em; line-height: 1; }
+  .tile .glyph svg { display: block; line-height: 1; }
+
+  /* faq */
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 32px; }
+  .faq h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+  .faq p { font-size: 13px; color: var(--muted); margin: 0; }
+  .faq code { font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+  /* footer */
+  footer {
+    border-top: 1px solid var(--line); padding: 28px 0 48px;
+    font-size: 12px; color: var(--faint);
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 860px) {
+    .hero { flex-direction: column; align-items: stretch; gap: 32px; }
+    .hero-shot { max-width: 320px; }
+    .install, .grid, .faq { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Free · Open source · macOS 13+</p>
+      <h1>Your todos, <em>in the menu bar.</em></h1>
+      <p class="sub">QuickTodo is a native Mac todo app that lives where your clock already is. Hit ⌘⌥T, type, press Return. No window to manage, no account, no Electron.</p>
+      <div class="cmd" style="margin-top:24px">
+        <code>brew install --cask quicktodo</code>
+        <button class="copy" data-copy="brew install --cask quicktodo">copy</button>
+      </div>
+      <p style="font-size:13px;color:var(--faint);margin:10px 0 0">Install details and the no-Homebrew route below.</p>
+    </div>
+    <div class="hero-shot">
+      <div class="shot">
+        <img src="screenshots/today.png" width="300" height="284" alt="The QuickTodo menu open, showing four todos under Today">
+      </div>
+    </div>
+  </div>
+
+  <section id="install">
+    <p class="lbl">Install</p>
+    <div class="install">
+      <div class="card">
+        <h2>With Homebrew</h2>
+        <p class="tag">Recommended — and the update path that just works.</p>
+        <div class="cmd">
+          <code>brew tap mdopeace/quicktodo</code>
+          <button class="copy" data-copy="brew tap mdopeace/quicktodo">copy</button>
+        </div>
+        <div class="cmd">
+          <code>brew install --cask quicktodo</code>
+          <button class="copy" data-copy="brew install --cask quicktodo">copy</button>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:14px 0 0">You don't have to upgrade this yourself — QuickTodo checks for updates on launch and every few hours when you open the menu, then downloads, verifies and installs in place from its footer button.</p>
+        <p style="font-size:13px;color:var(--muted);margin:8px 0 0">Prefer brew? <b style="color:var(--text)">brew update &amp;&amp; brew upgrade quicktodo</b> does the same thing.</p>
+      </div>
+      <div class="card">
+        <h2>Without Homebrew</h2>
+        <p class="tag">Grab the .app straight from Releases.</p>
+        <a class="btn" href="https://github.com/mdopeace/quicktodo/releases/latest/download/quicktodo.app.zip">↓ Download for macOS</a>
+        <ol class="steps">
+          <li>Unzip it and drag <code>quicktodo.app</code> into Applications</li>
+          <li>Launch it — the icon appears in your menu bar</li>
+        </ol>
+      </div>
+    </div>
+    <p class="note">The build is ad-hoc signed and not notarized, so the first launch of a downloaded copy needs right-click → Open (or <code>xattr -dr com.apple.quarantine /Applications/quicktodo.app</code>). Homebrew installs skip that step entirely. After that, the app updates itself from its footer button.</p>
+  </section>
+
+  <section id="screens">
+    <p class="lbl">Screens</p>
+    <div class="strip">
+      <div class="frame"><img src="screenshots/today.png" alt="Todos grouped under Today"></div>
+      <div class="frame"><img src="screenshots/overdue.png" alt="Past-due todos in Yesterday and Saturday sections, each with a move-to-today button"></div>
+      <div class="frame"><img src="screenshots/completed.png" alt="Completed todos struck through, a collapsed older-completions row, and the progress bar at 2 of 4"></div>
+      <div class="frame"><img src="screenshots/search.png" alt="Searching call in the add box, filtering five todos down to two matches"></div>
+      <div class="frame"><img src="screenshots/hover.png" alt="A row on hover showing the move-to-today arrow and an orange weekly repeat button"></div>
+      <div class="frame"><img src="screenshots/update.png" alt="An update waiting in the footer, shown as a blue download arrow"></div>
+      <div class="frame"><img src="screenshots/empty.png" alt="The empty state reading Nothing here yet"></div>
+    </div>
+  </section>
+
+  <section id="features">
+    <p class="lbl">Everything it does</p>
+    <div class="grid">
+      <div class="tile"><div class="glyph">⌘</div><h3>Opens from anywhere</h3><p>⌘⌥T brings the list up without touching the Dock.</p></div>
+      <div class="tile"><div class="glyph"><svg width="12.9" height="12.9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.5 21 6.5l-4 4"/><path d="M3 11.5V9a4 4 0 0 1 4-4h14"/><path d="M7 21.5 3 17.5l4-4"/><path d="M21 12.5V15a4 4 0 0 1-4 4H3"/></svg></div><h3>Repeats</h3><p>Daily or weekly. Finishing one creates the next.</p></div>
+      <div class="tile"><div class="glyph">→</div><h3>Move to today</h3><p>Overdue todos, one row or a whole day at once.</p></div>
+      <div class="tile"><div class="glyph"><span class="mir">⌕</span></div><h3>Live search</h3><p>Type in the same box you add with.</p></div>
+      <div class="tile"><div class="glyph">↕</div><h3>Drag to reorder</h3><p>Reorder within a day. VoiceOver actions too.</p></div>
+      <div class="tile"><div class="glyph">↓</div><h3>Self-updating</h3><p>Verifies the download and installs it in place.</p></div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <p class="lbl">Questions</p>
+    <div class="faq">
+      <div>
+        <h3>Is it really free?</h3>
+        <p>Yes — MIT licensed, and the source is on GitHub. No account, no trial, no upsell.</p>
+      </div>
+      <div>
+        <h3>Where does my data go?</h3>
+        <p>Nowhere. One JSON file in your own Application Support folder. Nothing is uploaded anywhere.</p>
+      </div>
+      <div>
+        <h3>Why won't the downloaded app open?</h3>
+        <p>It isn't notarized. Right-click the app → Open once, and macOS stops asking.</p>
+      </div>
+      <div>
+        <h3>How do updates work?</h3>
+        <p>It checks on launch, and at most once every few hours when you open the menu. The footer button then downloads, verifies and installs.</p>
+      </div>
+      <div>
+        <h3>Does it start on its own?</h3>
+        <p>Yes, release builds register as a login item. Turn it off in System Settings → General → Login Items.</p>
+      </div>
+      <div>
+        <h3>What do I need?</h3>
+        <p>macOS 13 or newer, Apple Silicon or Intel. Nothing else.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT licensed · © 2026 Md Mostafijur Rahman</span>
+    <span>
+      <a href="https://github.com/mdopeace/quicktodo">Source</a> ·
+      <a href="https://github.com/mdopeace/quicktodo/releases">Releases</a> ·
+      <a href="https://github.com/mdopeace/quicktodo/issues">Report an issue</a>
+    </span>
+  </footer>
+
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var done = function () {
+      var was = btn.textContent;
+      btn.textContent = 'copied';
+      btn.classList.add('done');
+      setTimeout(function () { btn.textContent = was; btn.classList.remove('done'); }, 1400);
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(btn.dataset.copy).then(done);
+    else done();
+  });
+});
+</script>
+
+</body>
+</html>
