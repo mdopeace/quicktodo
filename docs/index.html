@@ -19,10 +19,10 @@
     --line: #2a2c31;
     --text: #f2f3f5;
     --muted: #9aa1ab;
-    --faint: #6b7280;
+    --faint: #82868d; /* 4.84:1 on --bg; the old #6b7280 was 3.71 and failed AA */
     --amber-bg: #1a1710;
     --amber-line: #3a3222;
-    --amber: #8a7a5c;
+    --amber: #948464; /* 4.89:1 on --amber-bg; the old #8a7a5c was 4.28 */
     --maxw: 980px;
   }
   * { box-sizing: border-box; }
@@ -38,12 +38,20 @@
   }
   .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
   section { padding: 64px 0; border-top: 1px solid var(--line); }
-  section:first-of-type { border-top: 0; }
   .lbl {
     font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
     color: var(--faint); margin: 0 0 24px;
   }
   h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 700; letter-spacing: -.025em; line-height: 1.1; margin: 0; }
+  /* The line break is the design: "Your todos," white, "in the menu bar."
+     grey, each on its own line. Forcing it at the <em> also keeps the colour
+     change aligned with the break instead of splitting the phrase. */
+  h1 em { display: block; }
+  /* Headlines get balanced; body copy gets pretty. Short paragraphs (tile and
+     FAQ blurbs) would look cramped if forced to balance, but a lone word
+     stranded on the last line is the common failure, so avoid just that. */
+  p, li { text-wrap: pretty; }
+  code { overflow-wrap: anywhere; }
   h1 em { font-style: normal; color: #7d8590; }
   h2 { font-size: 20px; font-weight: 650; margin: 0 0 6px; letter-spacing: -.01em; }
   code, .cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -51,7 +59,7 @@
   /* hero */
   .hero { display: flex; gap: 48px; align-items: center; padding: 72px 0 64px; }
   .hero-copy { flex: 1.1; min-width: 0; }
-  .hero-shot { flex: 1; min-width: 0; }
+  .hero-shot { flex: 0 1 auto; min-width: 0; }
   .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); margin: 0 0 16px; }
   .sub { font-size: 17px; color: var(--muted); margin: 18px 0 0; max-width: 34ch; }
   .shot {
@@ -59,13 +67,16 @@
     overflow: hidden;
   }
   
-  .shot img { display: block; width: 100%; height: auto; }
+  .shot img { display: block; width: 100%; height: auto; max-width: 360px; margin: 0 auto; }
 
   /* install */
   .install { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .card {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 12px; padding: 22px;
+    /* Grid items default to min-width:auto, which locks the track to the
+       nowrap command's width and pushes the card past the viewport. */
+    min-width: 0;
   }
   .card .tag { font-size: 12px; color: var(--faint); margin: 0 0 18px; }
   .cmd {
@@ -74,7 +85,7 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     margin-bottom: 8px;
   }
-  .cmd code { overflow-x: auto; white-space: nowrap; }
+  .cmd code { overflow-x: auto; white-space: nowrap; min-width: 0; }
   .copy {
     font: inherit; font-size: 11px; color: var(--muted); background: none;
     border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px;
@@ -136,9 +147,23 @@
   footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { color: var(--text); }
 
-  @media (max-width: 860px) {
+  /* Tablet keeps the desktop's two-column hero — stacking it looked wrong, and
+     it halved the description to four narrow lines. Only the gap and the shot
+     shrink, so the copy keeps its width. */
+  @media (max-width: 1000px) and (min-width: 721px) {
+    .hero { gap: 32px; }
+    .shot img { max-width: 260px; }
+    .sub { max-width: 52ch; }
+  }
+  @media (max-width: 720px) {
     .hero { flex-direction: column; align-items: stretch; gap: 32px; }
-    .hero-shot { max-width: 320px; }
+    .shot img { max-width: none; }
+    .sub { max-width: 34ch; }
+  }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
     .install, .grid, .faq { grid-template-columns: 1fr; }
   }
 </style>
