@@ -562,7 +562,7 @@ struct TodoView: View {
             } else {
                 // Reorder controls are active-only: done rows sit in their own
                 // sections, so offering them would be a no-op.
-                content
+                let row = content
                     .draggable(item.id.uuidString)
                     .dropDestination(for: String.self) { payloads, _ in
                         // A filtered list would renumber only the visible rows.
@@ -591,12 +591,17 @@ struct TodoView: View {
                     .accessibilityAction(named: Text("Change repeat")) {
                         store.cycleRepeat(item.id)
                     }
-                    // Hover is pointer-only, so keyboard users need this route.
-                    .accessibilityAction(named: Text("Move to today")) {
+                // Hover is pointer-only, so keyboard users need this route — but only where
+                // the button shows, or it's a no-op they can't predict.
+                if Calendar.current.isDateInToday(item.updatedAt) {
+                    row
+                } else {
+                    row.accessibilityAction(named: Text("Move to today")) {
                         withAnimation(rowAnimation) {
                             store.moveToToday(ids: [item.id])
                         }
                     }
+                }
             }
         }
     }

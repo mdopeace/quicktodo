@@ -248,20 +248,32 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
-    /// Re-file tasks into today, at the top of the list: `order` belongs to the
-    /// old day's section, so it clears. Done rows keep their timestamp.
+    /// Re-file tasks to today, at the top of the list: `order` belongs to the
+    /// old day's section, so it clears. Done rows and rows already in today are
+    /// skipped.
     public func moveToToday(ids: [UUID]) {
         let wanted = Set(ids)
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
+        // Any day but today: the row button offers future rows too.
         let moving = items.indices.filter {
             wanted.contains(items[$0].id) && !items[$0].isDone
-                && cal.startOfDay(for: items[$0].updatedAt) < today
+                && cal.startOfDay(for: items[$0].updatedAt) != today
         }
         guard !moving.isEmpty else { return }
+        // Render order, newest first: one shared timestamp would tie and fall to
+        // the array-position tiebreak, reversing the section.
+        let ranked = moving.sorted {
+            Self.precedes((offset: $0, element: items[$0]), (offset: $1, element: items[$1]))
+        }
         let now = Date()
-        for i in moving {
-            items[i].updatedAt = now
+        // Millisecond steps keep moved rows above today's existing ones; the
+        // floor stops a big section moved just after midnight from spilling
+        // backwards. Clamped rows tie, so they fall back to the tiebreak.
+        let step = 0.001
+        let floor = max(now.addingTimeInterval(-Double(ranked.count) * step), today)
+        for (rank, i) in ranked.enumerated() {
+            items[i].updatedAt = max(now.addingTimeInterval(-Double(rank) * step), floor)
             items[i].order = nil
         }
         save()
