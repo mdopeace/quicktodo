@@ -591,8 +591,8 @@ struct TodoView: View {
                     .accessibilityAction(named: Text("Change repeat")) {
                         store.cycleRepeat(item.id)
                     }
-                // Hover is pointer-only, so keyboard users need this route — but only where
-                // the button shows, or it's a no-op they can't predict.
+                // Hover is pointer-only, so keyboard users need this route too — but only
+                // where the button shows, or it's a no-op.
                 if Calendar.current.isDateInToday(item.updatedAt) {
                     row
                 } else {

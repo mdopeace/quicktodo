@@ -456,9 +456,8 @@ final class TodoStoreTests: XCTestCase {
 
     // MARK: - Move to today
 
-    /// Two sections: a Yesterday bucket (A, B) and Today (C). C sits at the very
-    /// start of today so a moved row, stamped ~now, always outranks it — a noon
-    /// anchor would only hold for a suite run after midday.
+    /// Two sections: a Yesterday bucket (A, B) and Today (C). C sits at the start
+    /// of today, so a moved row stamped ~now always outranks it.
     private func storeWithPastDue() throws -> (store: TodoStore, url: URL, ids: [UUID]) {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
@@ -501,7 +500,7 @@ final class TodoStoreTests: XCTestCase {
         // D is named but already in today, so it must not be re-dated.
         store.moveToToday(ids: [ids[0], ids[1], ids[2], d])
 
-        // Yesterday's rows joined; the done and already-today rows stayed.
+        // Yesterday's rows joined; done and already-today rows stayed.
         XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["B", "A", "D"])
         XCTAssertEqual(store.activeByDay.count, 1)
         XCTAssertEqual(store.recentCompletedItems.map(\.title), ["C"])
@@ -519,7 +518,7 @@ final class TodoStoreTests: XCTestCase {
 
         store.moveToToday(ids: [ids[0], ids[1]])
 
-        // A shared timestamp would fall to the tiebreak and reverse it.
+        // A shared timestamp would tie and reverse it.
         XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["B", "A", "C"])
     }
 
@@ -536,7 +535,7 @@ final class TodoStoreTests: XCTestCase {
 
         store.moveToToday(ids: [store.items[0].id])
 
-        // The row button offers this row, so the store must honour it.
+        // The row button offers it, so the store must move it.
         XCTAssertTrue(cal.isDateInToday(store.items[0].updatedAt))
     }
 
@@ -552,7 +551,7 @@ final class TodoStoreTests: XCTestCase {
 
         store.moveToToday(ids: store.items.map(\.id))
 
-        // Spread stamps can't spill into yesterday near midnight.
+        // Spread stamps can't spill into yesterday.
         XCTAssertEqual(store.activeByDay.count, 1)
         let titles = store.activeByDay[0].items.map(\.title)
         XCTAssertEqual(titles.first, "t499")
