@@ -454,6 +454,111 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["Legacy"])
     }
 
+    // MARK: - Move to today
+
+    /// Two sections: a Yesterday bucket (A, B) and Today (C). C sits at the start
+    /// of today, so a moved row stamped ~now always outranks it.
+    private func storeWithPastDue() throws -> (store: TodoStore, url: URL, ids: [UUID]) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("A", createdAt: yesterday, updatedAt: yesterday)
+        store.add("B", createdAt: yesterday, updatedAt: yesterday.addingTimeInterval(60))
+        store.add("C", createdAt: today, updatedAt: today)
+        return (store, url, store.items.map(\.id))
+    }
+
+    func test_moveToToday_refiles_the_row_and_lands_it_on_top() throws {
+        let (store, url, ids) = try storeWithPastDue()
+        // Reordered yesterday: a stale rank would drop it mid-list.
+        store.move(ids[0], to: 0)
+        XCTAssertEqual(store.items[0].order, 0)
+
+        store.moveToToday(ids: [ids[0]])
+
+        XCTAssertTrue(Calendar.current.isDateInToday(store.items[0].updatedAt))
+        XCTAssertNil(store.items[0].order)
+        XCTAssertEqual(TodoStore.dayLabel(for: store.activeByDay[0].day), "Today")
+        // Today holds A and C; yesterday keeps B.
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["A", "C", "B"])
+        XCTAssertEqual(store.activeByDay.count, 2)
+
+        let reloaded = TodoStore(fileURL: url)
+        XCTAssertEqual(reloaded.activeByDay.flatMap(\.items).map(\.title), ["A", "C", "B"])
+    }
+
+    func test_moveToToday_bulk_moves_only_the_named_active_rows() throws {
+        let (store, _, ids) = try storeWithPastDue()
+        let today = Calendar.current.startOfDay(for: Date())
+        store.toggle(ids[2], updatedAt: today)  // C is done: no day section
+        store.add("D", createdAt: today, updatedAt: today)
+        let d = store.items.last!.id
+
+        // D is named but already in today, so it must not be re-dated.
+        store.moveToToday(ids: [ids[0], ids[1], ids[2], d])
+
+        // Yesterday's rows joined; done and already-today rows stayed.
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["B", "A", "D"])
+        XCTAssertEqual(store.activeByDay.count, 1)
+        XCTAssertEqual(store.recentCompletedItems.map(\.title), ["C"])
+        XCTAssertEqual(store.items[3].updatedAt, today)
+
+        // Empty is a no-op, not a write that re-dates everything.
+        store.moveToToday(ids: [])
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["B", "A", "D"])
+    }
+
+    func test_moveToToday_keeps_the_arrangement_the_user_set() throws {
+        let (store, _, ids) = try storeWithPastDue()
+        store.move(ids[1], to: 0)
+        XCTAssertEqual(store.activeByDay.last?.items.map(\.title), ["B", "A"])  // yesterday
+
+        store.moveToToday(ids: [ids[0], ids[1]])
+
+        // A shared timestamp would tie and reverse it.
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["B", "A", "C"])
+    }
+
+    func test_moveToToday_pulls_forward_a_future_dated_row() throws {
+        let cal = Calendar.current
+        let noon = cal.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: noon)!
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("future", createdAt: noon, updatedAt: tomorrow)
+        store.showFutureTasks = true  // normally hidden
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["future"])
+
+        store.moveToToday(ids: [store.items[0].id])
+
+        // The row button offers it, so the store must move it.
+        XCTAssertTrue(cal.isDateInToday(store.items[0].updatedAt))
+    }
+
+    func test_moveToToday_keeps_a_large_section_inside_today() throws {
+        let cal = Calendar.current
+        let yesterday = cal.date(byAdding: .day, value: -1, to: Date())!
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        for i in 0..<500 {
+            store.add(
+                "t\(i)", createdAt: yesterday, updatedAt: yesterday.addingTimeInterval(Double(i)))
+        }
+
+        store.moveToToday(ids: store.items.map(\.id))
+
+        // Spread stamps can't spill into yesterday.
+        XCTAssertEqual(store.activeByDay.count, 1)
+        let titles = store.activeByDay[0].items.map(\.title)
+        XCTAssertEqual(titles.first, "t499")
+        XCTAssertEqual(titles.last, "t0")
+    }
+
     // MARK: - Repeat
 
     /// One noon-today task already carrying `rule`.
