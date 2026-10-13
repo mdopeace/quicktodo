@@ -3,6 +3,8 @@
 A minimal menu-bar todo app for macOS, written in Swift/SwiftUI.
 No Electron, no bloat — just a fast native app that lives in your menu bar.
 
+<img src="docs/screenshots/today.png" alt="QuickTodo open from the menu bar, showing four todos under Today" width="420">
+
 ## Install
 
 ### via Homebrew (recommended)
@@ -65,6 +67,16 @@ open dist/quicktodo.app
 - Registers itself as a login item on launch in release builds (no in-app toggle; disable it in System Settings → General → Login Items)
 - Auto-updates via GitHub API (check on launch; on menu-open at most once every 4h; footer button downloads, verifies the SHA-256, replaces the running bundle in place and reopens it)
 - Ad-hoc signed, not sandboxed (the in-app updater rewrites its own `.app` bundle on disk, which App Sandbox forbids)
+
+<p align="center">
+  <img src="docs/screenshots/overdue.png" alt="Past-due todos grouped under Yesterday and an earlier date, each section offering a move-to-today button" height="260">
+  <img src="docs/screenshots/completed.png" alt="Completed todos struck through, a collapsed row of older completions, and the progress bar" height="260">
+  <img src="docs/screenshots/hover.png" alt="A hovered row showing the move-to-today arrow and an orange weekly repeat button" height="260">
+</p>
+
+<p align="center">
+  <sub>Past due, completed, and the hover controls for repeat and move to today.</sub>
+</p>
 
 ## Notes
 
