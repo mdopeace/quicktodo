@@ -10,7 +10,10 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="QuickTodo — a todo app that lives in your Mac menu bar">
 <meta property="og:description" content="Native SwiftUI todo app for macOS. Hit ⌘⌥T, type, press Return. No window, no account, no Electron.">
-<meta property="og:image" content="https://mdopeace.github.io/quicktodo/icon.png">
+<meta property="og:image" content="https://mdopeace.github.io/quicktodo/social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://mdopeace.github.io/quicktodo/social.png">
 <meta name="twitter:card" content="summary_large_image">
 <style>
   :root {
@@ -39,20 +42,19 @@
   .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
   section { padding: 64px 0; border-top: 1px solid var(--line); }
   .lbl {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em;
     color: var(--faint); margin: 0 0 24px;
   }
   h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 700; letter-spacing: -.025em; line-height: 1.1; margin: 0; }
   /* The line break is the design: "Your todos," white, "in the menu bar."
      grey, each on its own line. Forcing it at the <em> also keeps the colour
      change aligned with the break instead of splitting the phrase. */
-  h1 em { display: block; }
+  h1 em { display: block; font-style: normal; color: #7d8590; }
   /* Headlines get balanced; body copy gets pretty. Short paragraphs (tile and
      FAQ blurbs) would look cramped if forced to balance, but a lone word
      stranded on the last line is the common failure, so avoid just that. */
   p, li { text-wrap: pretty; }
   code { overflow-wrap: anywhere; }
-  h1 em { font-style: normal; color: #7d8590; }
   h2 { font-size: 20px; font-weight: 650; margin: 0 0 6px; letter-spacing: -.01em; }
   code, .cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
@@ -66,7 +68,6 @@
     background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
     overflow: hidden;
   }
-  
   .shot img { display: block; width: 100%; height: auto; max-width: 360px; margin: 0 auto; }
 
   /* install */
@@ -85,7 +86,9 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     margin-bottom: 8px;
   }
-  .cmd code { overflow-x: auto; white-space: nowrap; min-width: 0; }
+  .cmd code { overflow-x: auto; white-space: nowrap; min-width: 0; scrollbar-width: thin; }
+  .cmd code::-webkit-scrollbar { height: 4px; }
+  .cmd code::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
   .copy {
     font: inherit; font-size: 11px; color: var(--muted); background: none;
     border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px;
@@ -93,6 +96,7 @@
   }
   .copy:hover { color: var(--text); border-color: var(--faint); }
   .copy.done { color: #3fb950; border-color: #2c4a32; }
+  .copy.failed { color: var(--amber); border-color: var(--amber-line); }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--text); color: var(--bg);
@@ -179,7 +183,7 @@
       <p class="sub">QuickTodo is a native Mac todo app that lives where your clock already is. Hit ⌘⌥T, type, press Return. No window to manage, no account, no Electron.</p>
       <div class="cmd" style="margin-top:24px">
         <code>brew install --cask quicktodo</code>
-        <button class="copy" data-copy="brew install --cask quicktodo">copy</button>
+        <button class="copy" data-copy="brew install --cask quicktodo" aria-live="polite">copy</button>
       </div>
       <p style="font-size:13px;color:var(--faint);margin:10px 0 0">Install details and the no-Homebrew route below.</p>
     </div>
@@ -191,18 +195,18 @@
   </div>
 
   <section id="install">
-    <p class="lbl">Install</p>
+    <h2 class="lbl">Install</h2>
     <div class="install">
       <div class="card">
         <h2>With Homebrew</h2>
         <p class="tag">Recommended — and the update path that just works.</p>
         <div class="cmd">
           <code>brew tap mdopeace/quicktodo</code>
-          <button class="copy" data-copy="brew tap mdopeace/quicktodo">copy</button>
+          <button class="copy" data-copy="brew tap mdopeace/quicktodo" aria-live="polite">copy</button>
         </div>
         <div class="cmd">
           <code>brew install --cask quicktodo</code>
-          <button class="copy" data-copy="brew install --cask quicktodo">copy</button>
+          <button class="copy" data-copy="brew install --cask quicktodo" aria-live="polite">copy</button>
         </div>
         <p style="font-size:13px;color:var(--muted);margin:14px 0 0">You don't have to upgrade this yourself — QuickTodo checks for updates on launch and every few hours when you open the menu, then downloads, verifies and installs in place from its footer button.</p>
         <p style="font-size:13px;color:var(--muted);margin:8px 0 0">Prefer brew? <b style="color:var(--text)">brew update &amp;&amp; brew upgrade quicktodo</b> does the same thing.</p>
@@ -221,20 +225,20 @@
   </section>
 
   <section id="screens">
-    <p class="lbl">Screens</p>
-    <div class="strip">
-      <div class="frame"><img src="screenshots/today.png" alt="Todos grouped under Today"></div>
-      <div class="frame"><img src="screenshots/overdue.png" alt="Past-due todos in Yesterday and Saturday sections, each with a move-to-today button"></div>
-      <div class="frame"><img src="screenshots/completed.png" alt="Completed todos struck through, a collapsed older-completions row, and the progress bar at 2 of 4"></div>
-      <div class="frame"><img src="screenshots/search.png" alt="Searching call in the add box, filtering five todos down to two matches"></div>
-      <div class="frame"><img src="screenshots/hover.png" alt="A row on hover showing the move-to-today arrow and an orange weekly repeat button"></div>
-      <div class="frame"><img src="screenshots/update.png" alt="An update waiting in the footer, shown as a blue download arrow"></div>
-      <div class="frame"><img src="screenshots/empty.png" alt="The empty state reading Nothing here yet"></div>
+    <h2 class="lbl">Screens</h2>
+    <div class="strip" tabindex="0" role="group" aria-label="Screenshots, scroll horizontally">
+      <div class="frame"><img src="screenshots/today.png" width="600" height="568" loading="lazy" alt="Todos grouped under Today"></div>
+      <div class="frame"><img src="screenshots/overdue.png" width="600" height="660" loading="lazy" alt="Past-due todos in Yesterday and Saturday sections, each with a move-to-today button"></div>
+      <div class="frame"><img src="screenshots/completed.png" width="600" height="672" loading="lazy" alt="Completed todos struck through, a collapsed older-completions row, and the progress bar at 2 of 4"></div>
+      <div class="frame"><img src="screenshots/search.png" width="600" height="424" loading="lazy" alt="Searching call in the add box, filtering five todos down to two matches"></div>
+      <div class="frame"><img src="screenshots/hover.png" width="600" height="542" loading="lazy" alt="A row on hover showing the move-to-today arrow and an orange weekly repeat button"></div>
+      <div class="frame"><img src="screenshots/update.png" width="600" height="496" loading="lazy" alt="An update waiting in the footer, shown as a blue download arrow"></div>
+      <div class="frame"><img src="screenshots/empty.png" width="600" height="306" loading="lazy" alt="The empty state reading Nothing here yet"></div>
     </div>
   </section>
 
   <section id="features">
-    <p class="lbl">Everything it does</p>
+    <h2 class="lbl">Everything it does</h2>
     <div class="grid">
       <div class="tile"><div class="glyph">⌘</div><h3>Opens from anywhere</h3><p>⌘⌥T brings the list up without touching the Dock.</p></div>
       <div class="tile"><div class="glyph"><svg width="12.9" height="12.9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.5 21 6.5l-4 4"/><path d="M3 11.5V9a4 4 0 0 1 4-4h14"/><path d="M7 21.5 3 17.5l4-4"/><path d="M21 12.5V15a4 4 0 0 1-4 4H3"/></svg></div><h3>Repeats</h3><p>Daily or weekly. Finishing one creates the next.</p></div>
@@ -246,7 +250,7 @@
   </section>
 
   <section id="faq">
-    <p class="lbl">Questions</p>
+    <h2 class="lbl">Questions</h2>
     <div class="faq">
       <div>
         <h3>Is it really free?</h3>
@@ -289,14 +293,18 @@
 <script>
 document.querySelectorAll('.copy').forEach(function (btn) {
   btn.addEventListener('click', function () {
-    var done = function () {
+    var flash = function (label, cls) {
       var was = btn.textContent;
-      btn.textContent = 'copied';
-      btn.classList.add('done');
-      setTimeout(function () { btn.textContent = was; btn.classList.remove('done'); }, 1400);
+      btn.textContent = label;
+      btn.classList.add(cls);
+      setTimeout(function () { btn.textContent = was; btn.classList.remove(cls); }, 1400);
     };
-    if (navigator.clipboard) navigator.clipboard.writeText(btn.dataset.copy).then(done);
-    else done();
+    var ok = function () { flash('copied', 'done'); };
+    // writeText rejects when the clipboard permission is denied or the document
+    // isn't focused, which the presence of navigator.clipboard does not rule out.
+    var no = function () { flash('press ⌘C', 'failed'); };
+    if (navigator.clipboard) navigator.clipboard.writeText(btn.dataset.copy).then(ok).catch(no);
+    else no();
   });
 });
 </script>
