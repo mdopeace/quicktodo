@@ -106,7 +106,6 @@
   .btn:hover { opacity: .85; }
   .steps { font-size: 13px; color: var(--muted); margin: 12px 0 0; padding-left: 18px; }
   .steps li { margin-bottom: 8px; }
-  .steps b { color: var(--text); font-weight: 600; }
   .note {
     font-size: 13px; color: var(--amber); background: var(--amber-bg);
     border: 1px solid var(--amber-line); border-radius: 9px;
@@ -140,7 +139,6 @@
   .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 32px; }
   .faq h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
   .faq p { font-size: 13px; color: var(--muted); margin: 0; }
-  .faq code { font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
   /* footer */
   footer {
@@ -226,7 +224,7 @@
 
   <section id="screens">
     <h2 class="lbl">Screens</h2>
-    <div class="strip" tabindex="0" role="group" aria-label="Screenshots, scroll horizontally">
+    <div class="strip" tabindex="0" role="region" aria-label="Screenshots, scroll horizontally">
       <div class="frame"><img src="screenshots/today.png" width="600" height="568" loading="lazy" alt="Todos grouped under Today"></div>
       <div class="frame"><img src="screenshots/overdue.png" width="600" height="660" loading="lazy" alt="Past-due todos in Yesterday and Saturday sections, each with a move-to-today button"></div>
       <div class="frame"><img src="screenshots/completed.png" width="600" height="672" loading="lazy" alt="Completed todos struck through, a collapsed older-completions row, and the progress bar at 2 of 4"></div>
@@ -292,12 +290,14 @@
 
 <script>
 document.querySelectorAll('.copy').forEach(function (btn) {
+  // Captured once, not per click: reading it inside the handler would capture
+  // the feedback text on a second click and never restore the label.
+  var label = btn.textContent;
   btn.addEventListener('click', function () {
-    var flash = function (label, cls) {
-      var was = btn.textContent;
-      btn.textContent = label;
+    var flash = function (text, cls) {
+      btn.textContent = text;
       btn.classList.add(cls);
-      setTimeout(function () { btn.textContent = was; btn.classList.remove(cls); }, 1400);
+      setTimeout(function () { btn.textContent = label; btn.classList.remove(cls); }, 1400);
     };
     var ok = function () { flash('copied', 'done'); };
     // writeText rejects when the clipboard permission is denied or the document
