@@ -19,7 +19,7 @@ SOURCE_VERSION=$(sed -n 's/^public let appVersion = "\(.*\)"$/\1/p' Sources/Quic
 PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
 if [ "$PLIST_VERSION" != "$SOURCE_VERSION" ]; then
     echo "ERROR: Info.plist says $PLIST_VERSION but Version.swift says $SOURCE_VERSION." >&2
-    echo "       Bump both (see scripts/release.sh) or the updater will reject the build." >&2
+    echo "       Bump both (see the Release workflow) or the updater will reject the build." >&2
     exit 2
 fi
 
