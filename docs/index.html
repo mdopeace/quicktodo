@@ -110,7 +110,7 @@
   .note {
     font-size: 13px; color: var(--amber); background: var(--amber-bg);
     border: 1px solid var(--amber-line); border-radius: 9px;
-    padding: 14px 16px; margin: 16px 0 0; line-height: 1.6;
+    padding: 12px 14px; margin: 14px 0 0; line-height: 1.6;
   }
   .note code { color: #b9a87f; font-size: 12px; }
 
@@ -219,9 +219,9 @@
           <li>Unzip it and drag <code>quicktodo.app</code> into Applications</li>
           <li>Launch it — the icon appears in your menu bar</li>
         </ol>
+        <p class="note">The build is ad-hoc signed and not notarized, so the first launch needs right-click → Open (or <code>xattr -dr com.apple.quarantine /Applications/quicktodo.app</code>). Homebrew installs skip this.</p>
       </div>
     </div>
-    <p class="note">The build is ad-hoc signed and not notarized, so the first launch of a downloaded copy needs right-click → Open (or <code>xattr -dr com.apple.quarantine /Applications/quicktodo.app</code>). Homebrew installs skip that step entirely. After that, the app updates itself from its footer button.</p>
   </section>
 
   <section id="screens">
