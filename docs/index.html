@@ -63,7 +63,7 @@
   .hero-copy { flex: 1.1; min-width: 0; }
   .hero-shot { flex: 0 1 auto; min-width: 0; }
   .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); margin: 0 0 16px; }
-  .sub { font-size: 17px; color: var(--muted); margin: 18px 0 0; max-width: 34ch; }
+  .sub { font-size: 17px; color: var(--muted); margin: 18px 0 0; max-width: 42ch; }
   .shot {
     background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
     overflow: hidden;
@@ -86,7 +86,7 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     margin-bottom: 8px;
   }
-  .cmd code { overflow-x: auto; white-space: nowrap; min-width: 0; scrollbar-width: thin; }
+  .cmd code { overflow-x: auto; white-space: pre; min-width: 0; scrollbar-width: thin; }
   .cmd code::-webkit-scrollbar { height: 4px; }
   .cmd code::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
   .copy {
@@ -149,6 +149,10 @@
   footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { color: var(--text); }
 
+  @media (min-width: 1001px) {
+    /* 346px is the copy column's height, so both hero columns end level. */
+    .shot img { height: 346px; width: auto; }
+  }
   /* Tablet keeps the desktop's two-column hero — stacking it looked wrong, and
      it halved the description to four narrow lines. Only the gap and the shot
      shrink, so the copy keeps its width. */
@@ -180,14 +184,16 @@
       <h1>Your todos, <em>in the menu bar.</em></h1>
       <p class="sub">QuickTodo is a native Mac todo app that lives where your clock already is. Hit ⌘⌥T, type, press Return. No window to manage, no account, no Electron.</p>
       <div class="cmd" style="margin-top:24px">
-        <code>brew install --cask quicktodo</code>
-        <button class="copy" data-copy="brew install --cask quicktodo" aria-live="polite">copy</button>
+        <code>brew tap mdopeace/quicktodo
+brew install --cask quicktodo</code>
+        <button class="copy" data-copy="brew tap mdopeace/quicktodo
+brew install --cask quicktodo" aria-live="polite">copy</button>
       </div>
       <p style="font-size:13px;color:var(--faint);margin:10px 0 0">Install details and the no-Homebrew route below.</p>
     </div>
     <div class="hero-shot">
       <div class="shot">
-        <img src="screenshots/today.png" width="300" height="284" alt="The QuickTodo menu open, showing four todos under Today">
+        <img src="screenshots/completed.png" width="600" height="672" alt="The QuickTodo menu with two todos under Today, two struck through under Completed, a collapsed older-completions row, and the progress bar at 2 of 4">
       </div>
     </div>
   </div>
