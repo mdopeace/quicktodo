@@ -148,6 +148,19 @@
   }
   footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { color: var(--text); }
+  @media (prefers-reduced-motion: no-preference) {
+    footer a.shine {
+      background: linear-gradient(90deg, var(--muted), var(--text), var(--muted));
+      background-size: 220% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      color: transparent;
+      animation: shine 4s linear infinite;
+    }
+    /* background-position % resolve against (container - image) = -120% here,
+       so -220% fell short and the loop restarted early. 183.33% is exactly one
+       220% image width, so the cycle closes. */
+    @keyframes shine { from { background-position: 183.33% 0; } to { background-position: 0 0; } }
+  }
 
   @media (min-width: 1001px) {
     /* 346px is the copy column's height, so both hero columns end level. */
@@ -286,7 +299,7 @@ brew install --cask quicktodo" aria-live="polite">copy</button>
   <footer>
     <span>MIT licensed · © 2026 Md Mostafijur Rahman</span>
     <span>
-      <a href="https://github.com/mdopeace/quicktodo">Source</a> ·
+      <a class="shine" href="https://github.com/mdopeace/quicktodo">Source</a> ·
       <a href="https://github.com/mdopeace/quicktodo/releases">Releases</a> ·
       <a href="https://github.com/mdopeace/quicktodo/issues">Report an issue</a>
     </span>
