@@ -393,9 +393,9 @@
       }
 
       @media (min-width: 1001px) {
-        /* 346px is the copy column's height, so both hero columns end level. */
+        /* 386px is the copy column's height, so both hero columns end level. */
         .shot img {
-          height: 346px;
+          height: 386px;
           width: auto;
         }
       }
@@ -452,15 +452,14 @@
             account, no Electron.
           </p>
           <div class="cmd" style="margin-top: 24px">
-            <code
-              >brew tap mdopeace/quicktodo&#10;brew install --cask
-              quicktodo</code
-            >
-            <button
-              class="copy"
-              data-copy="brew tap mdopeace/quicktodo&#10;brew install --cask quicktodo"
-              aria-live="polite"
-            >
+            <code>brew tap mdopeace/quicktodo</code>
+            <button class="copy" data-copy="brew tap mdopeace/quicktodo" aria-live="polite">
+              copy
+            </button>
+          </div>
+          <div class="cmd">
+            <code>brew install --cask quicktodo</code>
+            <button class="copy" data-copy="brew install --cask quicktodo" aria-live="polite">
               copy
             </button>
           </div>
