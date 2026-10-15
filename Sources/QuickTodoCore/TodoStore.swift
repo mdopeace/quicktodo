@@ -196,6 +196,19 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
+    /// Renames in place. `updatedAt` and `order` are deliberately untouched:
+    /// the day section is derived from `updatedAt`, so re-stamping it would
+    /// re-file a backdated todo into Today. Done rows are refused, as with `move`.
+    public func editTitle(_ id: UUID, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+            let i = items.firstIndex(where: { $0.id == id }),
+            !items[i].isDone
+        else { return }
+        items[i].title = trimmed
+        save()
+    }
+
     public func toggle(_ id: UUID, updatedAt: Date = Date()) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         let wasDone = items[i].isDone
