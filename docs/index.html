@@ -315,6 +315,11 @@
       }
       .tile .glyph {
         font-size: 17px;
+        /* Fixed height so the SVG glyphs put their heading on the same line
+           as the text ones, which fill the font's line box instead. */
+        height: 22px;
+        display: flex;
+        align-items: center;
       }
       .tile h3 {
         font-size: 14px;
@@ -608,6 +613,15 @@ brew install --cask quicktodo"
           </div>
           <div class="frame">
             <img
+              src="screenshots/edit.png"
+              width="600"
+              height="512"
+              loading="lazy"
+              alt="A todo being renamed in place, its title swapped for a text field with a save checkmark and a cancel button"
+            />
+          </div>
+          <div class="frame">
+            <img
               src="screenshots/update.png"
               width="600"
               height="496"
@@ -671,6 +685,26 @@ brew install --cask quicktodo"
             <div class="glyph">↕</div>
             <h3>Drag to reorder</h3>
             <p>Reorder within a day. VoiceOver actions too.</p>
+          </div>
+          <div class="tile">
+            <div class="glyph">
+              <svg
+                width="12.9"
+                height="12.9"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </div>
+            <h3>Rename inline</h3>
+            <p>Fix a todo's text where it sits, no re-adding.</p>
           </div>
           <div class="tile">
             <div class="glyph">↓</div>

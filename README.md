@@ -63,6 +63,7 @@ open dist/quicktodo.app
 - Tap a row to expand a truncated title
 - Drag an active todo to reorder it within its day (not while searching; completed rows can't reorder) — also VoiceOver "Move up"/"Move down" actions
 - Repeat a todo daily or weekly — hover a row for the repeat button, then click to cycle the cadence (the icon tints blue/orange); one more click turns it off. Completing a repeating todo creates the next occurrence, dated for that day.
+- Rename a todo inline — hover a row for the pencil, then edit the title in place and press Return or click the checkmark; the row's delete button becomes Cancel while editing. Only open todos are editable, and a rename never moves the row to another day or changes its position (also a VoiceOver "Edit" action)
 - Global hotkey (⌘⌥T) to open menu
 - Registers itself as a login item on launch in release builds (no in-app toggle; disable it in System Settings → General → Login Items)
 - Auto-updates via GitHub API (check on launch; on menu-open at most once every 4h; footer button downloads, verifies the SHA-256, replaces the running bundle in place and reopens it)
