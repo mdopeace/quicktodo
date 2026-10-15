@@ -7,6 +7,9 @@ on:
 
 jobs:
   test:
+    # The release workflow's own bump PR shows a red X: GitHub runs no jobs
+    # for GITHUB_TOKEN events.
+    if: github.actor != 'github-actions[bot]'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
