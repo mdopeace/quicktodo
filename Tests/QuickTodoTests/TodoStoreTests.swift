@@ -576,7 +576,12 @@ final class TodoStoreTests: XCTestCase {
 
     func test_moveToToday_keeps_a_large_section_inside_today() throws {
         let cal = Calendar.current
-        let yesterday = cal.date(byAdding: .day, value: -1, to: Date())!
+        // Noon, so the 499s of spread can't run past midnight. Off `Date()` the
+        // last rows landed in Today, where moveToToday skips them as already
+        // there — which broke the ordering for the final minutes of each day.
+        let yesterday =
+            cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
+            .addingTimeInterval(12 * 3600)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
