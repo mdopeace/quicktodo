@@ -46,6 +46,11 @@ final class Updater: ObservableObject {
 
     // MARK: - Public API
 
+    /// Only `scripts/screenshots.sh` calls this. The updater is a singleton, so
+    /// the renderer has to pin the state per shot or `.available` leaks into
+    /// every capture after it.
+    func setStateForScreenshots(_ newState: State) { state = newState }
+
     func checkOnLaunch() {
         checkForUpdates(showCheckingIndicator: false, manual: false)
     }

@@ -576,7 +576,12 @@ final class TodoStoreTests: XCTestCase {
 
     func test_moveToToday_keeps_a_large_section_inside_today() throws {
         let cal = Calendar.current
-        let yesterday = cal.date(byAdding: .day, value: -1, to: Date())!
+        // Noon, so the 499s of spread can't run past midnight. Off `Date()` the
+        // last rows landed in Today, where moveToToday skips them as already
+        // there — which broke the ordering for the final minutes of each day.
+        let yesterday =
+            cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
+            .addingTimeInterval(12 * 3600)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
         let store = TodoStore(fileURL: url)
@@ -832,5 +837,81 @@ final class TodoStoreTests: XCTestCase {
         // a single ordinary active row.
         XCTAssertEqual(store.items.count, 1)
         XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.id), [id])
+    }
+
+    // MARK: - Edit
+
+    func test_editTitle_updates_and_persists() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Buy mlik")
+        let id = store.items[0].id
+
+        store.editTitle(id, to: "  Buy milk  ")
+
+        // Trimmed on the way in, same as add.
+        XCTAssertEqual(store.items[0].title, "Buy milk")
+        XCTAssertEqual(TodoStore(fileURL: url).items[0].title, "Buy milk")
+    }
+
+    func test_editTitle_ignores_a_blank_title() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Keep me")
+        let id = store.items[0].id
+
+        // An emptied field cancels; it must not blank the todo out.
+        store.editTitle(id, to: "   ")
+        XCTAssertEqual(store.items[0].title, "Keep me")
+    }
+
+    /// Open rows only, same as `move` and `moveToToday`.
+    func test_editTitle_ignores_a_completed_item() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Buy milk")
+        let id = store.items[0].id
+        store.toggle(id)
+
+        store.editTitle(id, to: "Buy oat milk")
+
+        XCTAssertEqual(store.items[0].title, "Buy milk")
+    }
+
+    /// Day sections come from `updatedAt`, so an edit that re-stamped it would
+    /// re-file a backdated todo into Today. The row has to stay put.
+    func test_editTitle_leaves_the_row_in_its_day_section() throws {
+        let (store, _, ids) = try storeWithPastDue()
+
+        store.editTitle(ids[0], to: "A, renamed")
+
+        XCTAssertEqual(store.activeByDay.count, 2)
+        XCTAssertEqual(TodoStore.dayLabel(for: store.activeByDay[1].day), "Yesterday")
+        // Same place within it: B is still newer, so A stays second.
+        XCTAssertEqual(store.activeByDay[1].items.map(\.title), ["B", "A, renamed"])
+    }
+
+    func test_editTitle_keeps_a_manual_order() throws {
+        let (store, _, ids) = storeWithThreeToday()
+        store.move(ids[0], to: 0)  // A dragged to the top
+
+        store.editTitle(ids[0], to: "A, renamed")
+
+        XCTAssertEqual(store.items[0].order, 0)
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["A, renamed", "C", "B"])
+    }
+
+    func test_editTitle_ignores_an_unknown_id() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("Keep me")
+
+        store.editTitle(UUID(), to: "ghost")
+
+        XCTAssertEqual(store.items.map(\.title), ["Keep me"])
     }
 }

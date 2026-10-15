@@ -99,7 +99,22 @@ struct TodoView: View {
     @State private var olderExpanded = false
     /// Non-nil while a section's delete prompt is open.
     @State private var bulkTarget: BulkTarget?
+    /// The row being renamed, and the text in its field.
+    @State private var editing: UUID?
+    @State private var editDraft = ""
     @FocusState private var inputFocused: Bool
+    @FocusState private var editFocused: Bool
+
+    /// The three defaults are for `scripts/screenshots.sh`, which seeds the states
+    /// a pointer or the keyboard would normally set. The app always passes none.
+    init(store: TodoStore, hovered: UUID? = nil, searchText: String = "", editingRow: UUID? = nil) {
+        self.store = store
+        _hoveredItem = State(initialValue: hovered)
+        _search = State(initialValue: searchText)
+        _editing = State(initialValue: editingRow)
+        // The field has to start holding the title, or the shot shows it empty.
+        _editDraft = State(initialValue: store.items.first { $0.id == editingRow }?.title ?? "")
+    }
 
     /// Bind to a `let` in `body` — reading this inline re-walks the store on
     /// every keystroke.
@@ -185,15 +200,16 @@ struct TodoView: View {
                         bulkTarget = nil
                     }
                 } label: {
-                    Image(systemName: "checkmark.circle")
+                    Image(systemName: "checkmark")
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.green)
                 .accessibilityLabel(target.confirmLabel(ids.count))
                 .help(target.confirmLabel(ids.count))
                 Button {
                     withAnimation(rowAnimation) { bulkTarget = nil }
                 } label: {
-                    Image(systemName: "xmark.circle")
+                    Image(systemName: "xmark")
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Cancel")
@@ -282,6 +298,7 @@ struct TodoView: View {
                 hoveredItem = nil
                 // Don't reopen still showing the previous prompt.
                 bulkTarget = nil
+                editing = nil
                 scrollTopTick += 1
                 DispatchQueue.main.async { inputFocused = true }
             }
@@ -450,11 +467,23 @@ struct TodoView: View {
             // Search hides the control but leaves bulkTarget set, so clearing it here
             // would re-arm the prompt on its own.
             bulkTarget = nil
+            // Only when the row itself is filtered out, so narrowing the search
+            // by hand doesn't discard what's been typed.
+            if !editedRowListed { editing = nil }
             if onlyOlderMatches {
                 withAnimation(rowAnimation) { olderExpanded = true }
             }
             NotificationCenter.default.post(name: .quickTodoContentHeightChanged, object: nil)
         }
+    }
+
+    /// False once the row being renamed has been filtered out of every section.
+    private var editedRowListed: Bool {
+        guard let id = editing else { return true }
+        let rows =
+            visibleSections.flatMap(\.items) + visibleRecentDone.today
+            + visibleRecentDone.earlier + visibleOlderDone
+        return rows.contains { $0.id == id }
     }
 
     private func submit() {
@@ -469,6 +498,30 @@ struct TodoView: View {
             store.add(title)
         }
         scrollTopTick += 1
+    }
+
+    private func beginEdit(_ item: TodoItem) {
+        // Raw title: the row renders "->" as "→", and saving that back would
+        // rewrite the stored text.
+        editDraft = item.title
+        withAnimation(rowAnimation) { editing = item.id }
+        editFocused = true
+    }
+
+    /// A blank field cancels — `editTitle` ignores it — so no extra guard here.
+    private func commitEdit() {
+        guard let id = editing else { return }
+        withAnimation(rowAnimation) {
+            store.editTitle(id, to: editDraft)
+            editing = nil
+        }
+        // Hand the caret back so adding the next one needs no click.
+        DispatchQueue.main.async { inputFocused = true }
+    }
+
+    private func cancelEdit() {
+        withAnimation(rowAnimation) { editing = nil }
+        DispatchQueue.main.async { inputFocused = true }
     }
 
     /// `bulk` adds the control; nil for Today.
@@ -491,36 +544,63 @@ struct TodoView: View {
 
     private func row(_ item: TodoItem, in section: [TodoItem]) -> some View {
         let content = HStack(spacing: 8) {
-            Button {
-                withAnimation(rowAnimation) {
-                    store.toggle(item.id)
-                }
-            } label: {
-                Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
-            }
-            .buttonStyle(.plain)
-            Text(item.title.replacingOccurrences(of: "->", with: "→"))
-                .strikethrough(item.isDone)
-                .foregroundStyle(item.isDone ? .secondary : .primary)
-                .lineLimit(expandedItems.contains(item.id) ? nil : 1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture {
+            // Hidden while editing, so ticking the row can't carry the field into
+            // the Completed section.
+            if editing != item.id {
+                Button {
                     withAnimation(rowAnimation) {
-                        if expandedItems.contains(item.id) {
-                            expandedItems.remove(item.id)
-                        } else {
-                            expandedItems.insert(item.id)
-                        }
+                        store.toggle(item.id)
                     }
+                } label: {
+                    Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
                 }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel(expandedItems.contains(item.id) ? "Collapse" : "Expand")
-                .accessibilityHint(
-                    "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
-                )
-            if !item.isDone, hoveredItem == item.id {
+                .buttonStyle(.plain)
+            }
+            // Tap-to-expand rides on the text, so it goes when the field does.
+            Group {
+                if editing == item.id {
+                    TextField("Todo", text: $editDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($editFocused)
+                        .onSubmit(commitEdit)
+                        .accessibilityLabel("Edit todo")
+                } else {
+                    Text(item.title.replacingOccurrences(of: "->", with: "→"))
+                        .strikethrough(item.isDone)
+                        .foregroundStyle(item.isDone ? .secondary : .primary)
+                        .lineLimit(expandedItems.contains(item.id) ? nil : 1)
+                        .truncationMode(.tail)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(rowAnimation) {
+                                if expandedItems.contains(item.id) {
+                                    expandedItems.remove(item.id)
+                                } else {
+                                    expandedItems.insert(item.id)
+                                }
+                            }
+                        }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(
+                            expandedItems.contains(item.id) ? "Collapse" : "Expand"
+                        )
+                        .accessibilityHint(
+                            "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The cluster waits until the edit closes, so a half-typed one can't
+            // be dropped by clicking another row's pencil.
+            if editing == item.id {
+                Button(action: commitEdit) {
+                    Image(systemName: "checkmark")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.green)
+                .accessibilityLabel("Save")
+                .help("Save")
+            } else if !item.isDone, editing == nil, hoveredItem == item.id {
                 if !Calendar.current.isDateInToday(item.updatedAt) {
                     Button {
                         withAnimation(rowAnimation) {
@@ -535,6 +615,15 @@ struct TodoView: View {
                     .accessibilityLabel("Move to today")
                 }
                 Button {
+                    beginEdit(item)
+                } label: {
+                    Image(systemName: "pencil")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Edit")
+                .accessibilityLabel("Edit")
+                Button {
                     store.cycleRepeat(item.id)
                 } label: {
                     Image(systemName: "repeat")
@@ -545,15 +634,23 @@ struct TodoView: View {
                 .accessibilityLabel(repeatLabel(item))
                 .accessibilityHint("Click to cycle daily, weekly and off")
             }
+            // Stays put while editing, but turns into Cancel.
             Button {
-                withAnimation(rowAnimation) {
-                    store.delete(item.id)
+                if editing == item.id {
+                    cancelEdit()
+                } else {
+                    withAnimation(rowAnimation) {
+                        store.delete(item.id)
+                    }
                 }
             } label: {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            // Matches the bulk confirm pair: dimmed while deleting, not while cancelling.
+            .foregroundStyle(editing == item.id ? Color.primary : Color.secondary)
+            .accessibilityLabel(editing == item.id ? "Cancel" : "Delete")
+            .help(editing == item.id ? "Cancel" : "Delete")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -606,6 +703,9 @@ struct TodoView: View {
                     }
                     .accessibilityAction(named: Text("Change repeat")) {
                         store.cycleRepeat(item.id)
+                    }
+                    .accessibilityAction(named: Text("Edit")) {
+                        beginEdit(item)
                     }
                 // Hover is pointer-only, so keyboard users need this route too — but only
                 // where the button shows, or it's a no-op.
