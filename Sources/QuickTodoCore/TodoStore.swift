@@ -99,6 +99,13 @@ public final class TodoStore: ObservableObject {
             $0.updatedAt > $1.updatedAt
         }
     }
+    /// `recentCompletedItems` split at today's boundary.
+    public var recentCompletedByDay: (today: [TodoItem], earlier: [TodoItem]) {
+        let items = recentCompletedItems
+        // Newest-first, so today's rows are the prefix.
+        let todayCount = items.prefix(while: { Calendar.current.isDateInToday($0.updatedAt) }).count
+        return (Array(items[..<todayCount]), Array(items[todayCount...]))
+    }
     /// Done with updatedAt older than 7 days. Newest-first, shown collapsed.
     public var olderCompletedItems: [TodoItem] {
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else {
