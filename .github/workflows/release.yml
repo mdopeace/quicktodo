@@ -1,5 +1,12 @@
 name: Release
 
+# Two runs resolving the same version would fight over the bump branch.
+# Queue rather than cancel: a run that is halfway through publishing must
+# not be killed by someone double-clicking Run workflow.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 # One button in the Actions tab cuts a release: pick a bump, or type an exact
 # version, and the run bumps, tags, builds, publishes and updates the tap.
 #
@@ -102,6 +109,12 @@ jobs:
 
           git add Info.plist Sources/QuickTodoCore/Version.swift
           git commit -m "Bump version to $VERSION"
+          # A run that died after pushing leaves this branch behind, and the next
+          # run's push is rejected as non-fast-forward: the bump commit embeds a
+          # fresh timestamp, so the same edit is a different SHA. Delete the stale
+          # branch first. --force-with-lease is no use here: the shallow checkout
+          # never fetches the remote ref, so there is no expected value to check.
+          git push --quiet origin ":$BR" 2>/dev/null || true
           git push -u origin "$BR"
 
           PR_URL=$(gh pr create --base main --head "$BR" --title "Release v$VERSION" \
