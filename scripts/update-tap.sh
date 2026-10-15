@@ -7,8 +7,8 @@
 #   scripts/update-tap.sh <version> <sha256>
 #   scripts/update-tap.sh <version> <sha256> --dry-run
 #
-# --dry-run prints the cask to stdout and touches no git, so the generated file
-# can be diffed against what the release used to produce.
+# --dry-run prints the cask to stdout and touches no git, so the generated
+# file can be diffed against the live one.
 #
 # Set TAP_DIR to operate on an existing checkout (CI) instead of cloning one.
 #
