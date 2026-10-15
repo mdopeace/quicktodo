@@ -1,17 +1,12 @@
 name: Release
 
-# Two runs resolving the same version would fight over the bump branch.
-# Queue rather than cancel: a run that is halfway through publishing must
-# not be killed by someone double-clicking Run workflow.
+# Queue rather than cancel, so a mid-publish run is never killed.
 concurrency:
   group: release
   cancel-in-progress: false
 
 # One button in the Actions tab cuts a release: pick a bump, or type an exact
 # version, and the run bumps, tags, builds, publishes and updates the tap.
-#
-# The tag is pushed with GITHUB_TOKEN, which does not trigger other workflows.
-# That is deliberate -- there is no tag-triggered workflow to loop back into.
 
 on:
   workflow_dispatch:
@@ -43,8 +38,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # GITHUB_TOKEN cannot reach another repo, so the tap needs its own token.
-      # Checked before anything is merged or published: an expired or revoked
-      # token is still a non-empty string, so only a real request catches it.
+      # An expired or revoked token is still a non-empty string, so test it.
       - name: Verify the tap token
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -75,8 +69,6 @@ jobs:
               *)     V="$MAJOR.$MINOR.$((PATCH + 1))" ;;
             esac
           fi
-          # An unvalidated version reaches a release tag and the tap cask, where
-          # a typo ships a bundle nobody can match to a version.
           [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::'$V' is not a MAJOR.MINOR.PATCH version"; exit 1; }
           echo "version=$V" >> "$GITHUB_OUTPUT"
@@ -102,18 +94,14 @@ jobs:
           grep -q "appVersion = \"$VERSION\"" Sources/QuickTodoCore/Version.swift || {
             echo "Version.swift update failed"; exit 1; }
 
-          # Setting a key to the value it already holds leaves the file
-          # byte-identical, so the commit below would die on "nothing to commit".
+          # A no-op bump leaves both files unchanged, and git commit would fail.
           git diff --quiet && {
             echo "::error::main is already at $VERSION -- nothing to bump"; exit 1; }
 
           git add Info.plist Sources/QuickTodoCore/Version.swift
           git commit -m "Bump version to $VERSION"
-          # A run that died after pushing leaves this branch behind, and the next
-          # run's push is rejected as non-fast-forward: the bump commit embeds a
-          # fresh timestamp, so the same edit is a different SHA. Delete the stale
-          # branch first. --force-with-lease is no use here: the shallow checkout
-          # never fetches the remote ref, so there is no expected value to check.
+          # Clear any branch a failed run left behind: the new commit has a
+          # different SHA, so a plain push would be rejected as non-fast-forward.
           git push --quiet origin ":$BR" 2>/dev/null || true
           git push -u origin "$BR"
 
@@ -141,19 +129,14 @@ jobs:
           set -euo pipefail
           CREATE_ARCHIVE=1 ./scripts/package.sh local
 
-          # The tag and the shipped bundle must agree, or the updater shows a
-          # permanent "update available" that installs nothing.
+          # A bundle that disagrees with its tag shows a permanent fake update.
           BUILT=$(/usr/libexec/PlistBuddy \
             -c "Print :CFBundleShortVersionString" dist/quicktodo.app/Contents/Info.plist)
           if [ "$BUILT" != "$VERSION" ]; then
             echo "::error::built bundle reports $BUILT but the release is v$VERSION"; exit 1
           fi
 
-          # Tagging happens here, with the release, rather than before the build.
-          # A build failure used to leave v$VERSION on the remote with no release
-          # behind it, and the next run's `git push` was rejected as a duplicate.
-          # `gh release create` tags the current commit (HEAD, the merge) itself,
-          # so a failure above leaves nothing to clean up.
+          # This also tags HEAD, so a build failure above leaves nothing behind.
           gh release create "v$VERSION" --title "v$VERSION" --generate-notes \
             quicktodo.app.zip quicktodo.app.zip.sha256
 
