@@ -145,7 +145,11 @@ struct TodoView: View {
         }
     }
 
-    private var visibleRecentDone: [TodoItem] { matching(store.recentCompletedItems, query) }
+    private var visibleRecentDone: (today: [TodoItem], earlier: [TodoItem]) {
+        let (today, earlier) = store.recentCompletedByDay
+        let q = query
+        return (matching(today, q), matching(earlier, q))
+    }
     private var visibleOlderDone: [TodoItem] { matching(store.olderCompletedItems, query) }
 
     /// A section control acts on every row, so hide it while searching.
@@ -211,8 +215,9 @@ struct TodoView: View {
     /// Matches land only in the collapsed week-old section, so open it — otherwise
     /// the panel is a single header row.
     private var onlyOlderMatches: Bool {
-        query != nil && visibleSections.isEmpty && visibleRecentDone.isEmpty
-            && !visibleOlderDone.isEmpty
+        guard query != nil, visibleSections.isEmpty else { return false }
+        let recent = visibleRecentDone
+        return recent.today.isEmpty && recent.earlier.isEmpty && !visibleOlderDone.isEmpty
     }
 
     var body: some View {
@@ -309,14 +314,24 @@ struct TodoView: View {
                                     row(item, in: section.items)
                                 }
                             }
-                            if !visibleRecentDone.isEmpty {
+                            // Bound once: each read re-walks the store.
+                            let visibleRecent = visibleRecentDone
+                            if !visibleRecent.today.isEmpty || !visibleRecent.earlier.isEmpty {
                                 sectionHeader("Completed", bulk: .recent)
-                                ForEach(visibleRecentDone) { item in
-                                    row(item, in: visibleRecentDone)
+                                ForEach(visibleRecent.today) { item in
+                                    row(item, in: visibleRecent.today)
+                                }
+                                if !visibleRecent.today.isEmpty
+                                    && !visibleRecent.earlier.isEmpty
+                                {
+                                    Divider()
+                                        .padding(.horizontal, 36)
+                                        .padding(.vertical, 4)
+                                }
+                                ForEach(visibleRecent.earlier) { item in
+                                    row(item, in: visibleRecent.earlier)
                                 }
                             }
-                            // Bound once: every read walks the store and
-                            // re-filters by query.
                             let visibleOlder = visibleOlderDone
                             if !visibleOlder.isEmpty {
                                 DisclosureGroup(

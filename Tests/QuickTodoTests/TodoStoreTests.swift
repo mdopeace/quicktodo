@@ -158,6 +158,41 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.olderCompletedItems.map(\.title), ["Legacy"])
     }
 
+    // The divider draws only when both groups are non-empty.
+    func test_completed_split_separates_today_from_earlier_this_week() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("A")
+        store.add("B")
+        let threeDaysAgo = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        store.toggle(store.items[0].id, updatedAt: threeDaysAgo)
+        store.toggle(store.items[1].id)
+        XCTAssertEqual(store.recentCompletedByDay.today.map(\.title), ["B"])
+        XCTAssertEqual(store.recentCompletedByDay.earlier.map(\.title), ["A"])
+    }
+
+    func test_completed_split_has_no_earlier_group_when_only_today_completed() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("A")
+        store.toggle(store.items[0].id)
+        XCTAssertEqual(store.recentCompletedByDay.today.map(\.title), ["A"])
+        XCTAssertTrue(store.recentCompletedByDay.earlier.isEmpty)
+    }
+
+    func test_completed_split_has_no_today_group_when_only_earlier_this_week_completed() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        store.add("A")
+        let threeDaysAgo = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        store.toggle(store.items[0].id, updatedAt: threeDaysAgo)
+        XCTAssertTrue(store.recentCompletedByDay.today.isEmpty)
+        XCTAssertEqual(store.recentCompletedByDay.earlier.map(\.title), ["A"])
+    }
+
     func test_active_grouped_by_day_newest_day_first() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".json")
