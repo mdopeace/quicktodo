@@ -189,15 +189,16 @@ struct TodoView: View {
                         bulkTarget = nil
                     }
                 } label: {
-                    Image(systemName: "checkmark.circle")
+                    Image(systemName: "checkmark")
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.green)
                 .accessibilityLabel(target.confirmLabel(ids.count))
                 .help(target.confirmLabel(ids.count))
                 Button {
                     withAnimation(rowAnimation) { bulkTarget = nil }
                 } label: {
-                    Image(systemName: "xmark.circle")
+                    Image(systemName: "xmark")
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Cancel")
@@ -560,7 +561,8 @@ struct TodoView: View {
                         }
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(
-                            expandedItems.contains(item.id) ? "Collapse" : "Expand")
+                            expandedItems.contains(item.id) ? "Collapse" : "Expand"
+                        )
                         .accessibilityHint(
                             "Double tap to \(expandedItems.contains(item.id) ? "collapse" : "expand") this item"
                         )
@@ -575,8 +577,8 @@ struct TodoView: View {
                 .foregroundStyle(.green)
                 .accessibilityLabel("Save")
                 .help("Save")
-            // `editing == nil` on the cluster so a half-typed edit can't be
-            // dropped by clicking another row's pencil.
+                // `editing == nil` on the cluster so a half-typed edit can't be
+                // dropped by clicking another row's pencil.
             } else if !item.isDone, editing == nil, hoveredItem == item.id {
                 if !Calendar.current.isDateInToday(item.updatedAt) {
                     Button {
@@ -624,7 +626,8 @@ struct TodoView: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            // Matches the bulk confirm pair: dimmed while deleting, not while cancelling.
+            .foregroundStyle(editing == item.id ? Color.primary : Color.secondary)
             .accessibilityLabel(editing == item.id ? "Cancel" : "Delete")
             .help(editing == item.id ? "Cancel" : "Delete")
         }
