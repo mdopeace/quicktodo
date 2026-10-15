@@ -591,11 +591,30 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertNotEqual(next.id, done.id)
         XCTAssertNil(next.order)
 
-        let expected = Calendar.current.date(byAdding: .day, value: 1, to: noon)!
+        let expected = Calendar.current.startOfDay(
+            for: Calendar.current.date(byAdding: .day, value: 1, to: noon)!)
         XCTAssertEqual(next.createdAt, noon)  // authored today, not on the due date
         XCTAssertEqual(next.updatedAt, expected)
         XCTAssertEqual(store.recentCompletedItems.map(\.id), [id])
         XCTAssertTrue(store.activeByDay.isEmpty)
+    }
+
+    func test_spawned_occurrence_ranks_as_the_oldest_row_of_its_due_day() throws {
+        let day = Calendar.current.startOfDay(for: Date())
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let store = TodoStore(fileURL: url)
+        // Completed last night at 11:00, so the occurrence is dated today.
+        store.add("Water plants", createdAt: day.addingTimeInterval(-15 * 3600),
+                  updatedAt: day.addingTimeInterval(-13 * 3600))
+        store.setRepeat(.daily, for: store.items[0].id)
+        store.toggle(store.items[0].id, updatedAt: day.addingTimeInterval(-13 * 3600))
+
+        // A task added that morning lands above it. Fixed clocks, so the order
+        // can't drift with the run hour.
+        store.add("Pay rent", createdAt: day.addingTimeInterval(9 * 3600))
+
+        XCTAssertEqual(store.activeByDay.flatMap(\.items).map(\.title), ["Pay rent", "Water plants"])
     }
 
     func test_unmarking_a_repeat_retracts_the_occurrence_it_spawned() throws {
@@ -714,7 +733,7 @@ final class TodoStoreTests: XCTestCase {
         store.add("Water plants", createdAt: noon, updatedAt: noon)
         store.setRepeat(.daily, for: store.items[0].id)
         store.toggle(store.items[0].id, updatedAt: noon)
-        return (store, cal.date(byAdding: .day, value: 1, to: noon)!)
+        return (store, cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: noon)!))
     }
 
     func test_occurrence_spawns_dated_tomorrow_and_stays_hidden() throws {

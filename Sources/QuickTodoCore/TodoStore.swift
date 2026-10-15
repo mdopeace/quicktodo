@@ -203,8 +203,10 @@ public final class TodoStore: ObservableObject {
             var copy = items[i]
             copy.id = UUID()
             copy.isDone = false
-            // updatedAt files the occurrence; createdAt stays put for the tooltip.
-            copy.updatedAt = next
+            // Top of the due day, not its clock time: a later time would pin the
+            // occurrence above everything added that morning. createdAt stays
+            // put for the tooltip.
+            copy.updatedAt = Calendar.current.startOfDay(for: next)
             copy.spawnedFrom = items[i].id
             items.append(copy)
         }
