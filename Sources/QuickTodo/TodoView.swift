@@ -467,13 +467,23 @@ struct TodoView: View {
             // Search hides the control but leaves bulkTarget set, so clearing it here
             // would re-arm the prompt on its own.
             bulkTarget = nil
-            // The editor can be filtered out of the list, and come back open.
-            editing = nil
+            // Only when the row itself is filtered out, so narrowing the search
+            // by hand doesn't discard what's been typed.
+            if !editedRowListed { editing = nil }
             if onlyOlderMatches {
                 withAnimation(rowAnimation) { olderExpanded = true }
             }
             NotificationCenter.default.post(name: .quickTodoContentHeightChanged, object: nil)
         }
+    }
+
+    /// False once the row being renamed has been filtered out of every section.
+    private var editedRowListed: Bool {
+        guard let id = editing else { return true }
+        let rows =
+            visibleSections.flatMap(\.items) + visibleRecentDone.today
+            + visibleRecentDone.earlier + visibleOlderDone
+        return rows.contains { $0.id == id }
     }
 
     private func submit() {
@@ -534,8 +544,8 @@ struct TodoView: View {
 
     private func row(_ item: TodoItem, in section: [TodoItem]) -> some View {
         let content = HStack(spacing: 8) {
-            // Hidden while editing: ticking the row done would carry the field
-            // into the Completed section with it.
+            // Hidden while editing, so ticking the row can't carry the field into
+            // the Completed section.
             if editing != item.id {
                 Button {
                     withAnimation(rowAnimation) {
@@ -580,6 +590,8 @@ struct TodoView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // The cluster waits until the edit closes, so a half-typed one can't
+            // be dropped by clicking another row's pencil.
             if editing == item.id {
                 Button(action: commitEdit) {
                     Image(systemName: "checkmark")
@@ -588,8 +600,6 @@ struct TodoView: View {
                 .foregroundStyle(.green)
                 .accessibilityLabel("Save")
                 .help("Save")
-                // `editing == nil` on the cluster so a half-typed edit can't be
-                // dropped by clicking another row's pencil.
             } else if !item.isDone, editing == nil, hoveredItem == item.id {
                 if !Calendar.current.isDateInToday(item.updatedAt) {
                     Button {

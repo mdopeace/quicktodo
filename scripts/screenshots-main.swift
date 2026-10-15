@@ -36,7 +36,10 @@ struct Screenshots {
                 editingRow: shot == .edit ? RowID.editingMe : nil
             )
             .environment(\.colorScheme, .dark)
-            .background(Color(nsColor: .windowBackgroundColor))
+            // Pinned, not .windowBackgroundColor: that shifts between macOS
+            // releases and silently rewrites every shot. Calibrated, not Color(white:),
+            // which renders this value noticeably darker.
+            .background(Color(nsColor: NSColor(calibratedWhite: 23.0 / 255.0, alpha: 1)))
             let size = fittedSize(of: view)
             capture(view.frame(width: size.width, height: size.height),
                     to: outDir.appendingPathComponent("\(shot.rawValue).png"))
