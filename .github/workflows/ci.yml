@@ -7,6 +7,9 @@ on:
 
 jobs:
   test:
+    # GitHub suppresses jobs for events raised by GITHUB_TOKEN, so the version
+    # bump PR the release workflow opens always shows a red X with no log.
+    if: github.actor != 'github-actions[bot]'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
