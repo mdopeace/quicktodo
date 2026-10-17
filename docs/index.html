@@ -546,14 +546,22 @@ brew install --cask quicktodo"
               </li>
               <li>Launch it — the icon appears in your menu bar</li>
             </ol>
-            <p class="note">
-              The build is ad-hoc signed and not notarized, so the first launch
-              needs right-click → Open (or
-              <code
-                >xattr -dr com.apple.quarantine
-                /Applications/quicktodo.app</code
-              >). Homebrew installs skip this.
-            </p>
+            <div class="note">
+              Not notarized, so the first launch is blocked. macOS 15 removed
+              right-click → Open, so the popup only offers Done / Move to Bin.
+              Run this once:
+              <div class="cmd" style="margin-top: 10px">
+                <code>xattr -dr com.apple.quarantine /Applications/quicktodo.app</code>
+                <button
+                  class="copy"
+                  data-copy="xattr -dr com.apple.quarantine /Applications/quicktodo.app"
+                  aria-live="polite"
+                >
+                  copy
+                </button>
+              </div>
+              Homebrew installs skip this.
+            </div>
           </div>
         </div>
       </section>
@@ -734,8 +742,10 @@ brew install --cask quicktodo"
           <div>
             <h3>Why won't the downloaded app open?</h3>
             <p>
-              It isn't notarized. Right-click the app → Open once, and macOS
-              stops asking.
+              It isn't notarized, and macOS 15 removed right-click → Open, so the
+              popup only offers Done / Move to Bin. Run
+              <code>xattr -dr com.apple.quarantine /Applications/quicktodo.app</code>
+              once and it opens.
             </p>
           </div>
           <div>
