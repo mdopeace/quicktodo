@@ -546,14 +546,22 @@ brew install --cask quicktodo"
               </li>
               <li>Launch it — the icon appears in your menu bar</li>
             </ol>
-            <p class="note">
-              The build is ad-hoc signed and not notarized, so the first launch
-              needs right-click → Open (or
-              <code
-                >xattr -dr com.apple.quarantine
-                /Applications/quicktodo.app</code
-              >). Homebrew installs skip this.
-            </p>
+            <div class="note">
+              Not notarized, so the first launch may be blocked. macOS 15 and
+              later removed right-click → Open, leaving only Done / Move to Bin.
+              Run this once:
+              <div class="cmd" style="margin-top: 10px">
+                <pre><code>xattr -dr com.apple.quarantine /Applications/quicktodo.app</code></pre>
+                <button
+                  class="copy"
+                  data-copy="xattr -dr com.apple.quarantine /Applications/quicktodo.app"
+                  aria-live="polite"
+                >
+                  copy
+                </button>
+              </div>
+              Homebrew installs skip this.
+            </div>
           </div>
         </div>
       </section>
@@ -700,7 +708,9 @@ brew install --cask quicktodo"
                 aria-hidden="true"
               >
                 <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                <path
+                  d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                />
               </svg>
             </div>
             <h3>Rename inline</h3>
@@ -734,8 +744,13 @@ brew install --cask quicktodo"
           <div>
             <h3>Why won't the downloaded app open?</h3>
             <p>
-              It isn't notarized. Right-click the app → Open once, and macOS
-              stops asking.
+              It isn't notarized, and macOS 15 and later removed right-click →
+              Open, so the popup only offers Done / Move to Bin. Run
+              <code
+                >xattr -dr com.apple.quarantine
+                /Applications/quicktodo.app</code
+              >
+              once and it opens.
             </p>
           </div>
           <div>

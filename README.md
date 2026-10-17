@@ -82,8 +82,9 @@ open dist/quicktodo.app
 ## Notes
 
 - The app is ad-hoc signed for local use. It is not notarized, so the first
-  launch of a downloaded copy may require right-click → Open (or
-  `xattr -dr com.apple.quarantine /Applications/quicktodo.app`).
+  launch may be blocked, and macOS 15 and later removed right-click → Open (the
+  popup only offers Done / Move to Bin). Run
+  `xattr -dr com.apple.quarantine /Applications/quicktodo.app` once.
 - Contributions and issues are welcome, but `main` is branch-protected —
   please open a pull request.
 
