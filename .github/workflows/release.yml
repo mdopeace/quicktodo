@@ -83,6 +83,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # The dispatch ref may be a tag; branch from main so the merge
+          # can't revert anything main gained since.
+          git fetch origin main && git checkout -B main origin/main
+
           # Bump both files or the updater rejects the build: package.sh exits 2
           # when Info.plist and Version.swift disagree.
           BR="release/v$VERSION"
