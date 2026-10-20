@@ -281,9 +281,6 @@
         padding: 20px;
       }
       .tile .glyph {
-        font-size: 17px;
-        /* Fixed height so the SVG glyphs put their heading on the same line
-           as the text ones, which fill the font's line box instead. */
         height: 22px;
         display: flex;
         align-items: center;
@@ -297,10 +294,6 @@
         font-size: 13px;
         color: var(--muted);
         margin: 5px 0 0;
-      }
-      .tile .glyph svg {
-        display: block;
-        line-height: 1;
       }
       .tile .glyph i {
         display: block;
