@@ -298,12 +298,6 @@
         color: var(--muted);
         margin: 5px 0 0;
       }
-      .mir {
-        display: inline-block;
-        transform: scaleX(-1);
-        font-size: 1.8em;
-        line-height: 1;
-      }
       .tile .glyph svg {
         display: block;
         line-height: 1;
