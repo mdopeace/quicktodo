@@ -313,11 +313,6 @@
         font-size: 17px;
         line-height: 1;
       }
-      /* FA glyphs disagree on optical size at one em — solid shapes read
-       big, rings read small — so nudge the outliers. */
-      .tile .glyph .fa-arrows-rotate {
-        font-size: 19px;
-      }
 
       /* faq */
       .faq {
