@@ -48,6 +48,8 @@ open dist/quicktodo.app
 
 `local` builds a dev binary on purpose: it keeps its todos in `todos-dev.json`, separate from the installed app's `todos.json`. To build a prod binary from source, run `CONFIG=release ./scripts/package.sh local`.
 
+To run from the terminal instead, use `./scripts/dev.sh` (debug only). On Xcode 27+ a plain `swift run` renders the macOS 13 controls; `dev.sh` matches the installed app.
+
 ## Requirements
 
 - macOS 13+ (Apple Silicon or Intel)

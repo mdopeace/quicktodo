@@ -53,7 +53,9 @@ else
 fi
 CONFIG=${CONFIG:-$DEFAULT_CONFIG}
 
-swift build -c "$CONFIG" --disable-sandbox
+# swiftbuild stamps the SDK as the target; macOS backdates the look.
+# shortcut: no-op on CI (native is its default), deprecated in 6.4+
+swift build -c "$CONFIG" --disable-sandbox --build-system native
 rm -rf dist "$CONTENTS"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" dist
 
