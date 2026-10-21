@@ -155,8 +155,13 @@ public final class TodoStore: ObservableObject {
                 for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("QuickTodo", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            self.fileURL = dir.appendingPathComponent("todos.json")
-            Self.adoptSandboxedStore(into: self.fileURL)
+            // Dev and prod keep separate lists.
+            #if DEBUG
+                self.fileURL = dir.appendingPathComponent("todos-dev.json")
+            #else
+                self.fileURL = dir.appendingPathComponent("todos.json")
+                Self.adoptSandboxedStore(into: self.fileURL)
+            #endif
         }
         load()
     }

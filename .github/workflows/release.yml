@@ -131,7 +131,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          CREATE_ARCHIVE=1 ./scripts/package.sh local
+          CREATE_ARCHIVE=1 CONFIG=release ./scripts/package.sh local
 
           # A bundle that disagrees with its tag shows a permanent fake update.
           BUILT=$(/usr/libexec/PlistBuddy \
