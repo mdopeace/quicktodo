@@ -44,12 +44,16 @@ case "$MODE" in
         ;;
 esac
 
-# Clean build cache for release builds only (preserves incremental builds for local dev)
+# Release cleans; local builds Debug (dev todo list). CONFIG overrides.
 if [ "$MODE" = "release" ]; then
     swift package clean
+    DEFAULT_CONFIG=release
+else
+    DEFAULT_CONFIG=debug
 fi
+CONFIG=${CONFIG:-$DEFAULT_CONFIG}
 
-swift build -c release --disable-sandbox
+swift build -c "$CONFIG" --disable-sandbox
 rm -rf dist "$CONTENTS"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" dist
 
@@ -61,7 +65,7 @@ xcrun actool Assets.xcassets \
     --app-icon AppIcon \
     --output-partial-info-plist dist/asset-partial.plist
 
-cp .build/release/QuickTodo "$CONTENTS/MacOS/QuickTodo"
+cp ".build/$CONFIG/QuickTodo" "$CONTENTS/MacOS/QuickTodo"
 
 cp Info.plist "$CONTENTS/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$CONTENTS/Info.plist"
