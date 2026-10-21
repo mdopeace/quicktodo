@@ -1,4 +1,4 @@
 {
-    // swiftbuild stamps the SDK as the target; macOS backdates the look.
-    "swift.buildArguments": ["--build-system", "native"]
+  // swiftbuild stamps the SDK as the target; macOS backdates the look.
+  "swift.buildArguments": ["--build-system", "native"]
 }
