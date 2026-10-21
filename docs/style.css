@@ -106,7 +106,6 @@
         font-size: 17px;
         color: var(--muted);
         margin: 18px 0 0;
-        max-width: 42ch;
       }
       .shot {
         background: var(--panel);
@@ -118,7 +117,7 @@
         display: block;
         width: auto;
         height: auto;
-        max-width: 360px;
+        max-width: 300px;
         margin: 0 auto;
       }
 
@@ -373,9 +372,6 @@
         .shot img {
           max-width: 260px;
         }
-        .sub {
-          max-width: 52ch;
-        }
       }
       @media (max-width: 720px) {
         .hero {
@@ -385,9 +381,6 @@
         }
         .shot img {
           max-width: 100%;
-        }
-        .sub {
-          max-width: 34ch;
         }
       }
       @media (max-width: 860px) {

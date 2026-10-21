@@ -3,7 +3,7 @@
 A minimal menu-bar todo app for macOS, written in Swift/SwiftUI.
 No Electron, no bloat — just a fast native app that lives in your menu bar.
 
-<img src="docs/screenshots/today.png" alt="QuickTodo open from the menu bar, showing four todos under Today" width="420">
+<img src="docs/screenshots/today.png" alt="QuickTodo open from the menu bar, showing four todos under Today" width="300">
 
 ## Install
 
