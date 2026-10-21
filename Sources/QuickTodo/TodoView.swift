@@ -272,6 +272,7 @@ struct TodoView: View {
                     }
                 Button(action: submit) {
                     Image(systemName: "plus")
+                        .padding(.vertical, 1.5)
                 }
                 .accessibilityLabel("Add")
                 .help("Add")
