@@ -3,7 +3,7 @@
 A minimal menu-bar todo app for macOS, written in Swift/SwiftUI.
 No Electron, no bloat — just a fast native app that lives in your menu bar.
 
-<img src="docs/screenshots/today.png" alt="QuickTodo open from the menu bar, showing four todos under Today" width="300">
+<img src="docs/screenshots/completed.png" alt="QuickTodo showing completed tasks with a progress bar and a collapsed older completions row" width="300">
 
 ## Install
 
@@ -74,13 +74,13 @@ To run from the terminal instead, use `./scripts/dev.sh` (debug only). On Xcode 
 - Ad-hoc signed, not sandboxed (the in-app updater rewrites its own `.app` bundle on disk, which App Sandbox forbids)
 
 <p align="center">
-  <img src="docs/screenshots/overdue.png" alt="Past-due todos grouped under Yesterday and an earlier date, each section offering a move-to-today button" height="260">
-  <img src="docs/screenshots/completed.png" alt="Completed todos struck through, a collapsed row of older completions, and the progress bar" height="260">
+  <img src="docs/screenshots/edit.png" alt="A todo being renamed in place, with a save checkmark and cancel button" height="260">
   <img src="docs/screenshots/hover.png" alt="A hovered row showing the move-to-today arrow and an orange weekly repeat button" height="260">
+  <img src="docs/screenshots/move.png" alt="Bulk move confirmation for moving a past-due task to today" height="260">
 </p>
 
 <p align="center">
-  <sub>Past due, completed, and the hover controls for repeat and move to today.</sub>
+  <sub>Rename a task in place, access quick row actions, and move overdue tasks to today.</sub>
 </p>
 
 ## Notes
