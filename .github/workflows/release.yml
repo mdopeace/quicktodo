@@ -48,8 +48,10 @@ jobs:
             echo "::error::Missing secret HOMEBREW_TAP_TOKEN"
             exit 1
           fi
-          gh api repos/mdopeace/homebrew-quicktodo --jq '.permissions.push' \
-            || { echo "::error::HOMEBREW_TAP_TOKEN cannot read the tap repo"; exit 1; }
+          # Read the value, not just the exit code: a token with read but not
+          # push prints false and still exits 0, which would fail mid-publish.
+          [ "$(gh api repos/mdopeace/homebrew-quicktodo --jq '.permissions.push')" = true ] \
+            || { echo "::error::HOMEBREW_TAP_TOKEN cannot push to the tap repo"; exit 1; }
 
       - name: Resolve version
         id: resolve
