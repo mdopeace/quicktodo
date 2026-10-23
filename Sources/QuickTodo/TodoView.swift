@@ -105,17 +105,6 @@ struct TodoView: View {
     @FocusState private var inputFocused: Bool
     @FocusState private var editFocused: Bool
 
-    /// The three defaults are for `scripts/screenshots.sh`, which seeds the states
-    /// a pointer or the keyboard would normally set. The app always passes none.
-    init(store: TodoStore, hovered: UUID? = nil, searchText: String = "", editingRow: UUID? = nil) {
-        self.store = store
-        _hoveredItem = State(initialValue: hovered)
-        _search = State(initialValue: searchText)
-        _editing = State(initialValue: editingRow)
-        // The field has to start holding the title, or the shot shows it empty.
-        _editDraft = State(initialValue: store.items.first { $0.id == editingRow }?.title ?? "")
-    }
-
     /// Bind to a `let` in `body` — reading this inline re-walks the store on
     /// every keystroke.
     private var progress: ProgressTracker {
