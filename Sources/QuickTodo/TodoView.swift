@@ -232,7 +232,7 @@ struct TodoView: View {
                 Text("QuickTodo")
                     .font(.headline)
                 Spacer()
-                Text("⌘⌥T")
+                Text("⌥⇧Space")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
