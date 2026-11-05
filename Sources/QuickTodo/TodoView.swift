@@ -250,7 +250,7 @@ struct TodoView: View {
                     // Overlay, not prompt text: stays right-aligned at any
                     // version length and hides while typing.
                     .overlay(alignment: .trailing) {
-                        Text("v\(appVersion)")
+                        Text(appVersion)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .padding(.trailing, 8)
