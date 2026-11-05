@@ -33,15 +33,15 @@ final class HotKeyManager {
         if installStatus != noErr {
             NSLog("quicktodo: InstallEventHandler failed (%d) — hotkey dead", installStatus)
         }
-        // ⌘⌥T
+        // ⌥⇧Space
         let hkID = EventHotKeyID(signature: OSType(0x5154_5444), id: 1)  // 'QTTD'
         let hotKeyStatus = RegisterEventHotKey(
-            UInt32(kVK_ANSI_T), UInt32(cmdKey | optionKey),
+            UInt32(kVK_Space), UInt32(shiftKey | optionKey),
             hkID, GetApplicationEventTarget(), 0, &hotKeyRef
         )
         if hotKeyStatus != noErr {
             NSLog(
-                "quicktodo: RegisterEventHotKey failed (%d) — ⌘⌥T may be claimed by another app",
+                "quicktodo: RegisterEventHotKey failed (%d) — ⌥⇧Space may be claimed by another app",
                 hotKeyStatus)
         }
     }
