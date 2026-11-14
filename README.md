@@ -1,4 +1,4 @@
-# QuickTodo
+# <img src="docs/icon.png" alt="" width="40" align="center"> QuickTodo
 
 A minimal menu-bar todo app for macOS, written in Swift/SwiftUI.
 No Electron, no bloat — just a fast native app that lives in your menu bar.
